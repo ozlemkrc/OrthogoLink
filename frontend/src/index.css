@@ -21,15 +21,71 @@
   --gray-500: #6b7280;
   --gray-700: #374151;
   --gray-900: #111827;
+  --page-bg: #f9fafb;
+  --surface: #ffffff;
+  --surface-alt: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --border: #e5e7eb;
+  --muted: #f3f4f6;
+  --code-bg: #111827;
+  --code-text: #e5e7eb;
+  --success-bg: #f0fdf4;
+  --success-border: #bbf7d0;
+  --success-text: #15803d;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #dc2626;
+  --badge-overlap-bg: #fef2f2;
+  --badge-overlap-text: #dc2626;
+  --badge-unique-bg: #f0fdf4;
+  --badge-unique-text: #16a34a;
   --radius: 8px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 
+[data-theme="dark"] {
+  --primary: #60a5fa;
+  --primary-dark: #3b82f6;
+  --primary-light: rgba(96, 165, 250, 0.15);
+  --success: #34d399;
+  --warning: #fb923c;
+  --danger: #f87171;
+  --gray-50: #0b1220;
+  --gray-100: #0f172a;
+  --gray-200: #1f2937;
+  --gray-300: #273449;
+  --gray-500: #9ca3af;
+  --gray-700: #cbd5e1;
+  --gray-900: #e5e7eb;
+  --page-bg: #0b1220;
+  --surface: #111827;
+  --surface-alt: #0f172a;
+  --text-primary: #e5e7eb;
+  --text-secondary: #cbd5e1;
+  --border: #273449;
+  --muted: #111827;
+  --code-bg: #0f172a;
+  --code-text: #e2e8f0;
+  --success-bg: rgba(52, 211, 153, 0.12);
+  --success-border: rgba(52, 211, 153, 0.5);
+  --success-text: #6ee7b7;
+  --error-bg: rgba(248, 113, 113, 0.12);
+  --error-border: rgba(248, 113, 113, 0.5);
+  --error-text: #fecdd3;
+  --badge-overlap-bg: rgba(248, 113, 113, 0.12);
+  --badge-overlap-text: #fecaca;
+  --badge-unique-bg: rgba(52, 211, 153, 0.12);
+  --badge-unique-text: #bbf7d0;
+  --shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
 body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--gray-50);
-  color: var(--gray-900);
+  background: var(--page-bg);
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   line-height: 1.6;
 }
@@ -42,22 +98,42 @@ body {
 }
 
 .header {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 32px;
-  padding: 32px 0 24px;
-  border-bottom: 2px solid var(--gray-200);
+  padding: 24px 0 20px;
+  border-bottom: 2px solid var(--border);
 }
 
 .header h1 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--gray-900);
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .header p {
-  color: var(--gray-500);
+  color: var(--text-secondary);
   font-size: 0.95rem;
+}
+
+.theme-toggle {
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  transition: all 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 /* ── Tabs ─────────────────────────────────────────────── */
@@ -65,7 +141,7 @@ body {
   display: flex;
   gap: 0;
   margin-bottom: 24px;
-  border-bottom: 2px solid var(--gray-200);
+  border-bottom: 2px solid var(--border);
 }
 
 .tab {
@@ -77,12 +153,12 @@ body {
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
-  color: var(--gray-500);
+  color: var(--text-secondary);
   transition: all 0.15s;
 }
 
 .tab:hover {
-  color: var(--gray-700);
+  color: var(--text-primary);
 }
 
 .tab.active {
@@ -92,8 +168,8 @@ body {
 
 /* ── Card ─────────────────────────────────────────────── */
 .card {
-  background: white;
-  border: 1px solid var(--gray-200);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
   box-shadow: var(--shadow);
@@ -103,7 +179,7 @@ body {
 .card h2 {
   font-size: 1.15rem;
   margin-bottom: 16px;
-  color: var(--gray-900);
+  color: var(--text-primary);
 }
 
 /* ── Form ─────────────────────────────────────────────── */
@@ -111,7 +187,7 @@ textarea {
   width: 100%;
   min-height: 200px;
   padding: 12px;
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
   font-size: 0.9rem;
@@ -126,7 +202,7 @@ textarea:focus {
 }
 
 .file-upload {
-  border: 2px dashed var(--gray-300);
+  border: 2px dashed var(--border);
   border-radius: var(--radius);
   padding: 40px;
   text-align: center;
@@ -144,7 +220,7 @@ textarea:focus {
 }
 
 .file-upload p {
-  color: var(--gray-500);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -177,7 +253,7 @@ textarea:focus {
 
 .btn-primary {
   background: var(--primary);
-  color: white;
+  color: #ffffff;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -219,8 +295,8 @@ textarea:focus {
 }
 
 .stat-card {
-  background: white;
-  border: 1px solid var(--gray-200);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
   text-align: center;
@@ -267,7 +343,7 @@ tbody td {
 }
 
 tbody tr:hover {
-  background: var(--gray-50);
+  background: var(--muted);
 }
 
 .badge {
@@ -279,13 +355,13 @@ tbody tr:hover {
 }
 
 .badge-overlap {
-  background: #fef2f2;
-  color: var(--danger);
+  background: var(--badge-overlap-bg);
+  color: var(--badge-overlap-text);
 }
 
 .badge-unique {
-  background: #f0fdf4;
-  color: var(--success);
+  background: var(--badge-unique-bg);
+  color: var(--badge-unique-text);
 }
 
 /* Similarity bar */
@@ -316,8 +392,8 @@ tbody tr:hover {
 
 /* ── Report ───────────────────────────────────────────── */
 .report {
-  background: var(--gray-900);
-  color: #e5e7eb;
+  background: var(--code-bg);
+  color: var(--code-text);
   padding: 20px;
   border-radius: var(--radius);
   font-family: "Courier New", monospace;
@@ -335,8 +411,8 @@ tbody tr:hover {
 }
 
 .course-card {
-  background: white;
-  border: 1px solid var(--gray-200);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
   box-shadow: var(--shadow);
@@ -356,14 +432,24 @@ tbody tr:hover {
 
 .course-card .dept {
   font-size: 0.8rem;
-  color: var(--gray-500);
+  color: var(--text-secondary);
 }
 
 /* ── Error ────────────────────────────────────────────── */
 .error-msg {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: var(--danger);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+
+.alert-success {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
   padding: 12px 16px;
   border-radius: var(--radius);
   font-size: 0.9rem;

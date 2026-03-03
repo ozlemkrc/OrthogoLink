@@ -136,19 +136,7 @@ function AddCourse() {
 
         {error && <div className="error-msg">{error}</div>}
         {success && (
-          <div
-            style={{
-              background: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-              color: "var(--success)",
-              padding: "12px 16px",
-              borderRadius: "var(--radius)",
-              fontSize: "0.9rem",
-              marginTop: 12,
-            }}
-          >
-            {success}
-          </div>
+          <div className="alert-success">{success}</div>
         )}
 
         <div className="btn-row">
