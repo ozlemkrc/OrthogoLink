@@ -2,6 +2,8 @@
 
 AI-powered web application that compares a new course syllabus against stored university course descriptions and calculates semantic overlap percentage.
 
+**NEW**: Automated course import from Turkish universities (GTÜ supported, ITU/METU/IYTE coming soon)
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -20,7 +22,8 @@ spring26/
 │   ├── app/
 │   │   ├── api/routes/       # FastAPI route handlers
 │   │   │   ├── courses.py    # CRUD for courses (admin)
-│   │   │   └── compare.py    # Comparison endpoints (user)
+│   │   │   ├── compare.py    # Comparison endpoints (user)
+│   │   │   └── import_courses.py  # University import (NEW)
 │   │   ├── core/
 │   │   │   ├── config.py     # Environment-based configuration
 │   │   │   └── database.py   # Async DB engine & session
@@ -31,7 +34,8 @@ spring26/
 │   │   │   ├── embedding_service.py   # Sentence-BERT + FAISS
 │   │   │   ├── pdf_service.py         # PDF extraction + section splitting
 │   │   │   ├── comparison_service.py  # Orchestrates comparison pipeline
-│   │   │   └── course_service.py      # Course CRUD + embedding generation
+│   │   │   ├── course_service.py      # Course CRUD + embedding generation
+│   │   │   └── university_scraper.py  # University web scraping (NEW)
 │   │   ├── seed/
 │   │   │   └── seed_data.py   # 5 sample course descriptions
 │   │   └── main.py            # FastAPI app entry point
@@ -46,7 +50,8 @@ spring26/
 │   │   │   ├── UploadForm.js      # Text/PDF upload form
 │   │   │   ├── ResultsDisplay.js  # Similarity results tables
 │   │   │   ├── CourseList.js      # View stored courses
-│   │   │   └── AddCourse.js       # Add new course form
+│   │   │   ├── AddCourse.js       # Add new course form
+│   │   │   └── ImportCourses.js   # Import from universities (NEW)
 │   │   ├── App.js
 │   │   ├── index.js
 │   │   └── index.css
@@ -101,6 +106,15 @@ First startup will:
 |--------|----------|-------------|
 | `POST` | `/api/compare/text` | Compare pasted syllabus text |
 | `POST` | `/api/compare/pdf` | Compare uploaded PDF syllabus |
+
+### Import (NEW - University Course Catalog)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/import/universities` | List supported universities |
+| `GET` | `/api/import/gtu/departments` | Get GTÜ departments |
+| `POST` | `/api/import/gtu/preview` | Preview courses before import |
+| `POST` | `/api/import/gtu/import` | Import GTÜ courses to database |
 
 ### Example: Compare Text
 
@@ -162,6 +176,57 @@ All configuration is via environment variables (see `backend/.env.example`):
 | `MODEL_NAME` | `all-MiniLM-L6-v2` | Sentence-Transformer model |
 | `SIMILARITY_THRESHOLD` | `0.70` | Cosine similarity overlap threshold |
 | `FAISS_INDEX_PATH` | `/app/data/faiss_index` | FAISS index storage path |
+
+## University Course Import (NEW Feature)
+
+The system now supports automated importing of course catalogs from Turkish universities:
+
+### Supported Universities
+- ✅ **GTÜ (Gebze Technical University)** - Full support
+- 🔜 **İTÜ (Istanbul Technical University)** - Coming soon
+- 🔜 **ODTÜ (Middle East Technical University)** - Coming soon
+- 🔜 **İYTE (Izmir Institute of Technology)** - Coming soon
+- 🔜 **Hacettepe University** - Coming soon
+
+### How to Use
+
+1. Navigate to the **"Import from Universities"** tab in the web interface
+2. Select which university and departments you want to import from
+3. Optional: Set a limit per department for testing (e.g., 5 courses)
+4. Click **"Preview Courses"** to see what will be imported
+5. Click **"Import to Database"** to add courses with automatic embedding generation
+
+### GTÜ Import Features
+
+The GTÜ scraper imports complete course information including:
+- Course code and name
+- Department information
+- ECTS credits
+- Full course descriptions with:
+  - Course content outline
+  - Learning outcomes
+  - Prerequisites
+  - Assessment methods
+
+**Sample GTÜ Departments Available:**
+- BLM - Computer Engineering
+- MAK - Mechanical Engineering
+- ELK - Electronics Engineering
+- END - Industrial Engineering
+- KIM - Chemical Engineering
+
+### API Usage Example
+
+```bash
+# Preview courses before importing
+curl -X POST "http://localhost:8000/api/import/gtu/preview?limit=3"
+
+# Import all Computer Engineering (BLM) courses
+curl -X POST "http://localhost:8000/api/import/gtu/import?department_codes=BLM"
+
+# Import with limit
+curl -X POST "http://localhost:8000/api/import/gtu/import?department_codes=BLM&limit_per_department=5"
+```
 
 ## How It Works
 

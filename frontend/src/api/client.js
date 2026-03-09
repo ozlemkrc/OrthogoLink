@@ -53,3 +53,32 @@ export async function healthCheck() {
   const res = await client.get("/health");
   return res.data;
 }
+
+// ── Import ────────────────────────────────────────────────
+
+export async function fetchUniversities() {
+  const res = await client.get("/import/universities");
+  return res.data;
+}
+
+export async function fetchGTUDepartments() {
+  const res = await client.get("/import/gtu/departments");
+  return res.data;
+}
+
+export async function previewGTUCourses(departmentCodes = null, limit = 5) {
+  const res = await client.post("/import/gtu/preview", null, {
+    params: { department_codes: departmentCodes, limit },
+  });
+  return res.data;
+}
+
+export async function importGTUCourses(departmentCodes = null, limitPerDepartment = null) {
+  const res = await client.post("/import/gtu/import", null, {
+    params: { 
+      department_codes: departmentCodes, 
+      limit_per_department: limitPerDepartment 
+    },
+  });
+  return res.data;
+}

@@ -9,6 +9,17 @@ function UploadForm({ onResult }) {
   const [error, setError] = useState("");
   const fileRef = useRef();
 
+  const SAMPLE_TEXT = `Course Description
+This course introduces modern machine learning with emphasis on model building, evaluation, and deployment. Topics include linear models, decision trees, ensemble methods, neural networks, and unsupervised clustering.
+
+Learning Outcomes
+1. Build and tune supervised ML models.
+2. Implement neural networks with backpropagation.
+3. Evaluate models using cross-validation and metrics.
+
+Course Content
+Regression, classification, model selection, regularization, decision trees, random forests, gradient boosting, neural networks, k-means clustering, PCA, deployment considerations.`;
+
   const handleSubmit = async () => {
     setError("");
     setLoading(true);
@@ -81,11 +92,23 @@ function UploadForm({ onResult }) {
 
       {/* Text input */}
       {mode === "text" && (
-        <textarea
-          placeholder="Paste the full ECTS course form or syllabus text here..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
+        <>
+          <textarea
+            placeholder="Paste the full ECTS course form or syllabus text here..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <div className="btn-row" style={{ marginTop: 8 }}>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setText(SAMPLE_TEXT)}
+              style={{ background: "var(--gray-100)", color: "var(--gray-700)" }}
+            >
+              Use Sample Syllabus
+            </button>
+          </div>
+        </>
       )}
 
       {/* PDF upload */}

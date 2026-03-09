@@ -3,6 +3,8 @@ import UploadForm from "./components/UploadForm";
 import ResultsDisplay from "./components/ResultsDisplay";
 import CourseList from "./components/CourseList";
 import AddCourse from "./components/AddCourse";
+import ImportCourses from "./components/ImportCourses";
+import StatusBar from "./components/StatusBar";
 
 function App() {
   const [activeTab, setActiveTab] = useState("compare");
@@ -36,6 +38,8 @@ function App() {
         </button>
       </header>
 
+      <StatusBar />
+
       <nav className="tabs">
         <button
           className={`tab ${activeTab === "compare" ? "active" : ""}`}
@@ -55,6 +59,12 @@ function App() {
         >
           Add Course
         </button>
+        <button
+          className={`tab ${activeTab === "import" ? "active" : ""}`}
+          onClick={() => setActiveTab("import")}
+        >
+          Import from Universities
+        </button>
       </nav>
 
       {activeTab === "compare" && (
@@ -67,6 +77,8 @@ function App() {
       {activeTab === "courses" && <CourseList />}
 
       {activeTab === "add" && <AddCourse />}
+
+      {activeTab === "import" && <ImportCourses />}
     </div>
   );
 }

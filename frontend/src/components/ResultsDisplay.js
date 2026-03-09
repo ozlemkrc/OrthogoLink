@@ -11,6 +11,16 @@ function ResultsDisplay({ data }) {
     report_summary,
   } = data;
 
+  const downloadReport = () => {
+    const blob = new Blob([report_summary], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "orthogonality-report.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const simLevel = (val) => {
     if (val >= 0.7) return "high";
     if (val >= 0.4) return "moderate";
@@ -25,6 +35,18 @@ function ResultsDisplay({ data }) {
 
   return (
     <>
+      <div className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h2 style={{ marginBottom: 4 }}>Comparison Results</h2>
+          <div style={{ color: "var(--gray-500)", fontSize: "0.9rem" }}>
+            Review overlap metrics below. Export the full narrative report as needed.
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={downloadReport}>
+          Download Report (.txt)
+        </button>
+      </div>
+
       {/* Stats Overview */}
       <div className="stats-grid">
         <div className="stat-card">

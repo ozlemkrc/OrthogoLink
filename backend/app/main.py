@@ -4,12 +4,14 @@ FastAPI application entry point.
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from sqlalchemy import select, func
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.database import init_db, async_session
-from app.api.routes import courses, compare
+from app.api.routes import courses, compare, import_courses
 from app.services.embedding_service import embedding_service
 from app.services.course_service import rebuild_faiss_index
+from app.models.course import Course, CourseSection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,14 +89,26 @@ app.add_middleware(
 # Register routers
 app.include_router(courses.router, prefix="/api")
 app.include_router(compare.router, prefix="/api")
+app.include_router(import_courses.router, prefix="/api")
 
 
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
     index_size = embedding_service.index.ntotal if embedding_service.index else 0
+
+    # Fetch lightweight DB stats for quick visibility in UI
+    course_count = 0
+    section_count = 0
+    async with async_session() as db:
+        course_count = await db.scalar(select(func.count()).select_from(Course))
+        section_count = await db.scalar(select(func.count()).select_from(CourseSection))
+
     return {
         "status": "healthy",
         "model": settings.MODEL_NAME,
+        "similarity_threshold": settings.SIMILARITY_THRESHOLD,
         "index_vectors": index_size,
+        "course_count": course_count,
+        "section_count": section_count,
     }
