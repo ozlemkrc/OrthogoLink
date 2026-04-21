@@ -8,7 +8,7 @@ from sqlalchemy import select, func
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.database import init_db, async_session
-from app.api.routes import courses, compare, import_courses
+from app.api.routes import courses, compare, import_courses, auth
 from app.services.embedding_service import embedding_service
 from app.services.course_service import rebuild_faiss_index
 from app.models.course import Course, CourseSection
@@ -62,6 +62,10 @@ async def lifespan(app: FastAPI):
     # Seed sample data if empty
     await seed_database()
 
+    # Sync FAISS metadata with latest DB columns (including source university/faculty)
+    async with async_session() as db:
+        await rebuild_faiss_index(db)
+
     logger.info("Application ready")
     yield
 
@@ -90,6 +94,7 @@ app.add_middleware(
 app.include_router(courses.router, prefix="/api")
 app.include_router(compare.router, prefix="/api")
 app.include_router(import_courses.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 
 
 @app.get("/api/health")

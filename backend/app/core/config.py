@@ -8,7 +8,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Curriculum Orthogonality Checker"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
 
     # Database
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@db:5432/orthogonality"
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:80"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:80,http://localhost"
 
     # AI Model
     MODEL_NAME: str = "all-MiniLM-L6-v2"
@@ -24,6 +24,10 @@ class Settings(BaseSettings):
 
     # FAISS index path
     FAISS_INDEX_PATH: str = "/app/data/faiss_index"
+
+    # Auth
+    SECRET_KEY: str = "orthogolink-secret-key-change-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
     class Config:
         env_file = ".env"

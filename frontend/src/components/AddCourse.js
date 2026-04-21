@@ -5,6 +5,8 @@ function AddCourse() {
   const [form, setForm] = useState({
     code: "",
     name: "",
+    university: "",
+    faculty: "",
     department: "",
     credits: "",
     description: "",
@@ -35,7 +37,15 @@ function AddCourse() {
       };
       const result = await createCourse(payload);
       setSuccess(`Course "${result.code} — ${result.name}" added successfully with ${result.sections?.length || 0} sections.`);
-      setForm({ code: "", name: "", department: "", credits: "", description: "" });
+      setForm({
+        code: "",
+        name: "",
+        university: "",
+        faculty: "",
+        department: "",
+        credits: "",
+        description: "",
+      });
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to add course");
     } finally {
@@ -47,83 +57,83 @@ function AddCourse() {
     <div className="card">
       <h2>Add New Course</h2>
       <form onSubmit={handleSubmit}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div className="add-course-grid">
           <div>
-            <label style={{ fontSize: "0.85rem", fontWeight: 500, display: "block", marginBottom: 4 }}>
+            <label className="add-course-label">
               Course Code *
             </label>
             <input
               name="code"
+              className="input"
               value={form.code}
               onChange={handleChange}
               placeholder="e.g. CS450"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid var(--gray-300)",
-                borderRadius: "var(--radius)",
-                fontSize: "0.9rem",
-              }}
             />
           </div>
           <div>
-            <label style={{ fontSize: "0.85rem", fontWeight: 500, display: "block", marginBottom: 4 }}>
+            <label className="add-course-label">
               Course Name *
             </label>
             <input
               name="name"
+              className="input"
               value={form.name}
               onChange={handleChange}
               placeholder="e.g. Deep Learning"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid var(--gray-300)",
-                borderRadius: "var(--radius)",
-                fontSize: "0.9rem",
-              }}
             />
           </div>
           <div>
-            <label style={{ fontSize: "0.85rem", fontWeight: 500, display: "block", marginBottom: 4 }}>
+            <label className="add-course-label">
+              University
+            </label>
+            <input
+              name="university"
+              className="input"
+              value={form.university}
+              onChange={handleChange}
+              placeholder="e.g. Istanbul Technical University"
+            />
+          </div>
+          <div>
+            <label className="add-course-label">
+              Faculty
+            </label>
+            <input
+              name="faculty"
+              className="input"
+              value={form.faculty}
+              onChange={handleChange}
+              placeholder="e.g. Faculty of Engineering"
+            />
+          </div>
+          <div>
+            <label className="add-course-label">
               Department
             </label>
             <input
               name="department"
+              className="input"
               value={form.department}
               onChange={handleChange}
               placeholder="e.g. Computer Science"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid var(--gray-300)",
-                borderRadius: "var(--radius)",
-                fontSize: "0.9rem",
-              }}
             />
           </div>
           <div>
-            <label style={{ fontSize: "0.85rem", fontWeight: 500, display: "block", marginBottom: 4 }}>
+            <label className="add-course-label">
               ECTS Credits
             </label>
             <input
               name="credits"
+              className="input"
               value={form.credits}
               onChange={handleChange}
               type="number"
               placeholder="e.g. 6"
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                border: "1px solid var(--gray-300)",
-                borderRadius: "var(--radius)",
-                fontSize: "0.9rem",
-              }}
             />
           </div>
         </div>
 
-        <label style={{ fontSize: "0.85rem", fontWeight: 500, display: "block", marginBottom: 4 }}>
+        <label className="add-course-label">
           Course Description / Syllabus *
         </label>
         <textarea

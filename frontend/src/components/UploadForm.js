@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { compareText, comparePdf } from "../api/client";
+import { compareText, comparePdf, exportCsv } from "../api/client";
 
 function UploadForm({ onResult }) {
   const [mode, setMode] = useState("text"); // "text" or "pdf"

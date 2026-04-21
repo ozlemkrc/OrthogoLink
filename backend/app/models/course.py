@@ -1,7 +1,7 @@
 """
 SQLAlchemy models for course data and embeddings.
 """
-from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, LargeBinary
+from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, LargeBinary, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -10,13 +10,22 @@ from app.core.database import Base
 class Course(Base):
     """Stored university course with its description."""
     __tablename__ = "courses"
+    __table_args__ = (
+        UniqueConstraint("university", "code", name="uq_courses_university_code"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    code = Column(String(20), unique=True, nullable=False, index=True)
+    code = Column(String(20), nullable=False, index=True)
     name = Column(String(255), nullable=False)
+    university = Column(String(255), nullable=True)
+    faculty = Column(String(255), nullable=True)
     department = Column(String(255), nullable=True)
     credits = Column(Integer, nullable=True)
     description = Column(Text, nullable=False)
+    source_url = Column(String(500), nullable=True)
+    source_fetched_at = Column(DateTime(timezone=True), nullable=True)
+    parser_name = Column(String(100), nullable=True)
+    parser_version = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     sections = relationship("CourseSection", back_populates="course", cascade="all, delete-orphan")
@@ -61,3 +70,15 @@ class SectionMatch(Base):
     similarity_score = Column(Float, nullable=False)
 
     comparison = relationship("ComparisonResult", back_populates="matches")
+
+
+class User(Base):
+    """Application user for authentication."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    role = Column(String(20), nullable=False, default="user", server_default="user")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

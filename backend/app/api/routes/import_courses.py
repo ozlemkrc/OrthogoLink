@@ -1,39 +1,49 @@
 """
 University course import API routes.
 Allows importing courses from Turkish university catalogs.
+Supports GTU, ITU, METU, Hacettepe, and IYTE.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
 
 from app.core.database import get_db
-from app.services.university_scraper import gtu_scraper
+from app.core.security import require_admin
+from app.services.university_scraper import UNIVERSITY_SCRAPERS
 from app.services.course_service import create_course
-from app.models.schemas import CourseCreate, CourseOut
+from app.models.course import Course, User
+from app.models.schemas import CourseCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/import", tags=["Import"])
 
 
 class ImportRequest(BaseModel):
-    """Request schema for importing courses."""
-    university: str  # "gtu", "itu", "metu", etc.
+    university: str
     department_codes: Optional[List[str]] = None
     limit_per_department: Optional[int] = None
 
 
+class ImportFailure(BaseModel):
+    label: str
+    reason: str
+
+
 class ImportResponse(BaseModel):
-    """Response schema for import operations."""
     message: str
+    total_fetched: int
     total_imported: int
+    total_skipped: int
     total_failed: int
-    imported_courses: List[str]  # List of course codes
+    imported_courses: List[str]
+    skipped_courses: List[str] = []
+    failed_courses: List[ImportFailure] = []
 
 
 class UniversityInfo(BaseModel):
-    """Information about supported universities."""
     code: str
     name: str
     available: bool
@@ -43,67 +53,157 @@ class UniversityInfo(BaseModel):
 async def list_universities():
     """List all supported universities for import."""
     return [
-        {
-            "code": "gtu",
-            "name": "Gebze Teknik Üniversitesi",
-            "available": True,
-        },
-        {
-            "code": "itu",
-            "name": "İstanbul Teknik Üniversitesi",
-            "available": False,
-        },
-        {
-            "code": "metu",
-            "name": "Orta Doğu Teknik Üniversitesi",
-            "available": False,
-        },
-        {
-            "code": "iyte",
-            "name": "İzmir Yüksek Teknoloji Enstitüsü",
-            "available": False,
-        },
-        {
-            "code": "hacettepe",
-            "name": "Hacettepe Üniversitesi",
-            "available": False,
-        },
+        {"code": code, "name": scraper.name, "available": True}
+        for code, scraper in UNIVERSITY_SCRAPERS.items()
     ]
 
 
+@router.get("/{university_code}/departments")
+async def get_departments(university_code: str):
+    """Get list of departments for a specific university."""
+    scraper = UNIVERSITY_SCRAPERS.get(university_code.lower())
+    if not scraper:
+        raise HTTPException(status_code=404, detail=f"University '{university_code}' not found")
+    try:
+        departments = await scraper.get_departments()
+        return {"university": scraper.name, "departments": departments}
+    except Exception as e:
+        logger.error(f"Error fetching departments for {university_code}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{university_code}/preview")
+async def preview_courses(
+    university_code: str,
+    department_codes: Optional[List[str]] = None,
+    limit: int = 5,
+):
+    """Preview courses that would be imported from a university."""
+    scraper = UNIVERSITY_SCRAPERS.get(university_code.lower())
+    if not scraper:
+        raise HTTPException(status_code=404, detail=f"University '{university_code}' not found")
+    try:
+        courses = await scraper.bulk_import(
+            department_codes=department_codes,
+            limit_per_dept=limit,
+        )
+        return {
+            "university": scraper.name,
+            "total_courses": len(courses),
+            "courses": courses[:20],
+        }
+    except Exception as e:
+        logger.error(f"Error previewing courses for {university_code}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{university_code}/import", response_model=ImportResponse)
+async def import_courses(
+    university_code: str,
+    db: AsyncSession = Depends(get_db),
+    department_codes: Optional[List[str]] = None,
+    limit_per_department: Optional[int] = None,
+    _admin: User = Depends(require_admin),
+):
+    """Import courses from a university into the database."""
+    scraper = UNIVERSITY_SCRAPERS.get(university_code.lower())
+    if not scraper:
+        raise HTTPException(status_code=404, detail=f"University '{university_code}' not found")
+
+    logger.info(f"Starting import from {scraper.name}... Departments: {department_codes}")
+
+    try:
+        courses_data = await scraper.bulk_import(
+            department_codes=department_codes,
+            limit_per_dept=limit_per_department,
+        )
+
+        if not courses_data:
+            raise HTTPException(status_code=404, detail="No courses found")
+
+        imported: List[str] = []
+        skipped: List[str] = []
+        failed: List[ImportFailure] = []
+        seen_in_batch: set[tuple[str, str]] = set()
+
+        for course_data in courses_data:
+            # Normalize identity before uniqueness checks: trim + uppercase code,
+            # trim university. Prevents duplicate inserts from whitespace drift
+            # or mixed-case codes coming out of the scraper.
+            raw_code = (course_data.get("code") or "").strip().upper()
+            raw_uni = (course_data.get("university") or scraper.name).strip()
+            course_data["code"] = raw_code
+            course_data["university"] = raw_uni
+            identity = (raw_uni, raw_code)
+            label = f"{raw_uni}::{raw_code}"
+
+            if not raw_code:
+                failed.append(ImportFailure(label=label, reason="Missing course code"))
+                continue
+
+            if identity in seen_in_batch:
+                logger.info(f"{label} duplicated within fetch batch; skipping")
+                skipped.append(label)
+                continue
+            seen_in_batch.add(identity)
+
+            try:
+                course_create = CourseCreate(**course_data)
+
+                result = await db.execute(
+                    select(Course).where(
+                        Course.code == course_create.code,
+                        Course.university == course_create.university,
+                    )
+                )
+                if result.scalar_one_or_none():
+                    logger.info(f"Course {label} already exists, skipping")
+                    skipped.append(label)
+                    continue
+
+                await create_course(db, course_create)
+                imported.append(label)
+                logger.info(f"Imported: {label}")
+            except Exception as e:
+                logger.error(f"Failed to import {label}: {e}", exc_info=True)
+                failed.append(ImportFailure(label=label, reason=str(e)[:200]))
+
+        await db.commit()
+
+        return ImportResponse(
+            message=(
+                f"Import from {scraper.name}: "
+                f"{len(imported)} imported, {len(skipped)} skipped, {len(failed)} failed "
+                f"(fetched {len(courses_data)})"
+            ),
+            total_fetched=len(courses_data),
+            total_imported=len(imported),
+            total_skipped=len(skipped),
+            total_failed=len(failed),
+            imported_courses=imported,
+            skipped_courses=skipped,
+            failed_courses=failed,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error during import from {university_code}: {str(e)}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Keep backward compatibility for GTU-specific endpoints
 @router.get("/gtu/departments")
 async def get_gtu_departments():
-    """Get list of GTU departments."""
-    try:
-        departments = await gtu_scraper.get_departments()
-        return {"departments": departments}
-    except Exception as e:
-        logger.error(f"Error fetching GTU departments: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return await get_departments("gtu")
 
 
 @router.post("/gtu/preview")
 async def preview_gtu_courses(
     department_codes: Optional[List[str]] = None,
-    limit: int = 5
+    limit: int = 5,
 ):
-    """
-    Preview courses that would be imported from GTU without actually importing them.
-    Useful for checking data quality before bulk import.
-    """
-    try:
-        logger.info(f"Previewing GTU courses for departments: {department_codes}")
-        courses = await gtu_scraper.bulk_import(
-            department_codes=department_codes,
-            limit_per_dept=limit
-        )
-        return {
-            "total_courses": len(courses),
-            "courses": courses[:10]  # Return first 10 for preview
-        }
-    except Exception as e:
-        logger.error(f"Error previewing GTU courses: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return await preview_courses("gtu", department_codes, limit)
 
 
 @router.post("/gtu/import", response_model=ImportResponse)
@@ -111,90 +211,12 @@ async def import_gtu_courses(
     db: AsyncSession = Depends(get_db),
     department_codes: Optional[List[str]] = None,
     limit_per_department: Optional[int] = None,
+    admin: User = Depends(require_admin),
 ):
-    """
-    Import courses from GTU course catalog into the database.
-    This will scrape the GTU website and add courses to your system.
-    """
-    logger.info(f"Starting GTU course import... Departments: {department_codes}")
-    
-    try:
-        # Scrape courses from GTU
-        courses_data = await gtu_scraper.bulk_import(
-            department_codes=department_codes,
-            limit_per_dept=limit_per_department
-        )
-        
-        if not courses_data:
-            raise HTTPException(
-                status_code=404,
-                detail="No courses found for the specified departments"
-            )
-        
-        # Import courses into database
-        imported = []
-        failed = []
-        
-        for course_data in courses_data:
-            try:
-                course_create = CourseCreate(**course_data)
-                # Check if course already exists
-                from sqlalchemy import select
-                from app.models.course import Course
-                
-                result = await db.execute(
-                    select(Course).where(Course.code == course_create.code)
-                )
-                existing = result.scalar_one_or_none()
-                
-                if existing:
-                    logger.info(f"Course {course_create.code} already exists, skipping")
-                    failed.append(course_create.code)
-                    continue
-                
-                # Create course with embeddings
-                await create_course(db, course_create)
-                imported.append(course_create.code)
-                logger.info(f"Successfully imported course: {course_create.code}")
-                
-            except Exception as e:
-                logger.error(f"Failed to import course {course_data.get('code')}: {str(e)}")
-                failed.append(course_data.get('code', 'unknown'))
-                continue
-        
-        # Commit all changes
-        await db.commit()
-        
-        return ImportResponse(
-            message=f"Import complete: {len(imported)} courses imported, {len(failed)} failed",
-            total_imported=len(imported),
-            total_failed=len(failed),
-            imported_courses=imported
-        )
-        
-    except Exception as e:
-        logger.error(f"Error during GTU import: {str(e)}")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/generic", response_model=ImportResponse)
-async def import_from_university(
-    request: ImportRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Generic endpoint for importing courses from any supported university.
-    Currently only supports GTU.
-    """
-    if request.university.lower() == "gtu":
-        return await import_gtu_courses(
-            db=db,
-            department_codes=request.department_codes,
-            limit_per_department=request.limit_per_department
-        )
-    else:
-        raise HTTPException(
-            status_code=501,
-            detail=f"University '{request.university}' is not yet supported. Currently available: GTU"
-        )
+    return await import_courses(
+        "gtu",
+        db=db,
+        department_codes=department_codes,
+        limit_per_department=limit_per_department,
+        _admin=admin,
+    )
