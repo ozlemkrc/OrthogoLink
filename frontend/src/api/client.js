@@ -27,6 +27,7 @@ client.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem(STORAGE_KEYS.authToken);
       localStorage.removeItem(STORAGE_KEYS.authUser);
+      window.dispatchEvent(new Event("auth:logout"));
     }
     return Promise.reject(err);
   }
@@ -60,6 +61,11 @@ export async function updateCourse(id, data) {
 
 export async function deleteCourse(id) {
   await client.delete(`/courses/${id}`);
+}
+
+export async function deleteCourseBulk(ids) {
+  const res = await client.post("/courses/bulk-delete", { ids });
+  return res.data;
 }
 
 export async function fetchDepartments() {

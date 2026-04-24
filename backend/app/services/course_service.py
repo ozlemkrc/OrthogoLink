@@ -163,6 +163,54 @@ async def delete_course(db: AsyncSession, course_id: int) -> bool:
     return True
 
 
+async def reembed_all_sections(db: AsyncSession):
+    """
+    Re-encode every course section from its stored text using the current model,
+    update the binary embeddings in the DB, then rebuild the FAISS index.
+    Called when the embedding model has changed.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    result = await db.execute(
+        select(CourseSection).options(selectinload(CourseSection.course))
+    )
+    sections = result.scalars().all()
+
+    if not sections:
+        embedding_service.index = None
+        embedding_service.id_map = []
+        embedding_service.save_index()
+        logger.info("No sections to re-embed")
+        return
+
+    texts = [
+        f"{sec.heading}: {sec.content}" if sec.content else (sec.heading or "")
+        for sec in sections
+    ]
+    logger.info(f"Re-embedding {len(texts)} sections with model '{settings.MODEL_NAME}'...")
+    emb_array = embedding_service.encode(texts)
+
+    metadata = []
+    for i, sec in enumerate(sections):
+        sec.embedding = emb_array[i].tobytes()
+        metadata.append({
+            "course_id": sec.course.id,
+            "course_code": sec.course.code,
+            "course_name": sec.course.name,
+            "university": sec.course.university or "",
+            "faculty": sec.course.faculty or "",
+            "section_heading": sec.heading,
+            "section_content": sec.content or "",
+            "department": sec.course.department or "",
+        })
+
+    await db.flush()
+    embedding_service.build_index(emb_array, metadata)
+    embedding_service.save_index()
+    logger.info(f"Re-embedding complete: {len(sections)} sections indexed")
+
+
 async def rebuild_faiss_index(db: AsyncSession):
     """Rebuild the entire FAISS index from stored course section embeddings."""
     result = await db.execute(

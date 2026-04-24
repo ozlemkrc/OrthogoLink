@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:80,http://localhost"
 
-    # AI Model
-    MODEL_NAME: str = "all-MiniLM-L6-v2"
+    # AI Model — multilingual model for cross-language (TR/EN) semantic comparison
+    MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
     SIMILARITY_THRESHOLD: float = 0.70
 
     # FAISS index path

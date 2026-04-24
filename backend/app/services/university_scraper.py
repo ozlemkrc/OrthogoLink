@@ -2,8 +2,9 @@
 University course catalog scraper service.
 
 GTÜ and Hacettepe both publish their Bologna catalogs via the same ASP.NET
-WebForms OIBS stack, so they share an OIBSBolognaScraper base class. İTÜ,
-ODTÜ and İYTE currently serve curated seed data and are queued for live
+WebForms OIBS stack, so they share an OIBSBolognaScraper base class. İYTE
+has its own WordPress-based CENG catalog and uses a dedicated scraper.
+İTÜ and ODTÜ currently serve curated seed data and are queued for live
 ingestion.
 """
 import logging

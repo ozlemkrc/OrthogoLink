@@ -2,6 +2,14 @@ import React, { useEffect, useState } from "react";
 import { fetchDashboardStats } from "../api/client";
 import { getSimilarityLevel } from "../utils/similarity";
 
+const STAT_ICONS = {
+  courses:     "📚",
+  sections:    "📑",
+  vectors:     "🔢",
+  comparisons: "📊",
+  similarity:  "〜",
+};
+
 function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,45 +24,43 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <div className="card" style={{ textAlign: "center", padding: 40 }}>
-        <div className="spinner-lg" />
-        <p style={{ marginTop: 16, color: "var(--text-secondary)" }}>Loading dashboard...</p>
+      <div className="card">
+        <div className="loading-state">
+          <div className="spinner-lg" />
+          <p>Loading dashboard…</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return <div className="card error-msg">Failed to load dashboard: {error}</div>;
+    return (
+      <div className="card error-msg">
+        <span>⚠</span> Failed to load dashboard: {error}
+      </div>
+    );
   }
 
   if (!stats) return null;
 
+  const avgSim = stats.average_similarity
+    ? `${(stats.average_similarity * 100).toFixed(1)}%`
+    : "N/A";
+
   return (
     <>
       {/* Stats Overview */}
-      <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-        <div className="stat-card">
-          <div className="stat-value" style={{ color: "var(--primary)" }}>{stats.course_count}</div>
-          <div className="stat-label">Total Courses</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value" style={{ color: "var(--primary)" }}>{stats.section_count}</div>
-          <div className="stat-label">Course Sections</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value" style={{ color: "var(--primary)" }}>{stats.index_vectors}</div>
-          <div className="stat-label">Index Vectors</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value" style={{ color: "var(--primary)" }}>{stats.comparison_count}</div>
-          <div className="stat-label">Comparisons Run</div>
-        </div>
-        <div className="stat-card">
-          <div className={`stat-value ${getSimilarityLevel(stats.average_similarity)}`}>
-            {stats.average_similarity ? `${(stats.average_similarity * 100).toFixed(1)}%` : "N/A"}
-          </div>
-          <div className="stat-label">Avg Similarity</div>
-        </div>
+      <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+        <StatCard icon={STAT_ICONS.courses}     value={stats.course_count}     label="Total Courses"    className="primary" />
+        <StatCard icon={STAT_ICONS.sections}    value={stats.section_count}    label="Course Sections"  className="primary" />
+        <StatCard icon={STAT_ICONS.vectors}     value={stats.index_vectors}    label="Index Vectors"    className="primary" />
+        <StatCard icon={STAT_ICONS.comparisons} value={stats.comparison_count} label="Comparisons Run"  className="primary" />
+        <StatCard
+          icon={STAT_ICONS.similarity}
+          value={avgSim}
+          label="Avg Similarity"
+          className={stats.average_similarity ? getSimilarityLevel(stats.average_similarity) : "primary"}
+        />
       </div>
 
       {/* Department Distribution */}
@@ -63,16 +69,13 @@ function Dashboard() {
           <h2>Courses by Department</h2>
           <div className="dept-chart">
             {stats.department_distribution.map((dept) => {
-              const maxCount = Math.max(...stats.department_distribution.map(d => d.count));
+              const maxCount = Math.max(...stats.department_distribution.map((d) => d.count));
               const pct = (dept.count / maxCount) * 100;
               return (
                 <div key={dept.department} className="dept-bar-row">
-                  <div className="dept-bar-label">{dept.department}</div>
+                  <div className="dept-bar-label" title={dept.department}>{dept.department}</div>
                   <div className="dept-bar-track">
-                    <div
-                      className="dept-bar-fill"
-                      style={{ width: `${pct}%` }}
-                    />
+                    <div className="dept-bar-fill" style={{ width: `${pct}%` }} />
                   </div>
                   <div className="dept-bar-count">{dept.count}</div>
                 </div>
@@ -86,56 +89,77 @@ function Dashboard() {
       {stats.recent_comparisons.length > 0 && (
         <div className="card">
           <h2>Recent Comparisons</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Input Preview</th>
-                <th>Overall Similarity</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.recent_comparisons.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.id}</td>
-                  <td style={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {c.input_preview}
-                  </td>
-                  <td>
-                    <div className="sim-bar-wrap">
-                      <span>{(c.overall_similarity * 100).toFixed(1)}%</span>
-                      <div className="sim-bar">
-                        <div
-                          className={`sim-bar-fill ${getSimilarityLevel(c.overall_similarity)}`}
-                          style={{ width: `${c.overall_similarity * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                    {c.created_at ? new Date(c.created_at).toLocaleDateString() : ""}
-                  </td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Input Preview</th>
+                  <th>Similarity</th>
+                  <th>Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {stats.recent_comparisons.map((c) => (
+                  <tr key={c.id}>
+                    <td style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>{c.id}</td>
+                    <td style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.input_preview}
+                    </td>
+                    <td>
+                      <div className="sim-bar-wrap">
+                        <span className={getSimilarityLevel(c.overall_similarity)}>
+                          {(c.overall_similarity * 100).toFixed(1)}%
+                        </span>
+                        <div className="sim-bar">
+                          <div
+                            className={`sim-bar-fill ${getSimilarityLevel(c.overall_similarity)}`}
+                            style={{ width: `${c.overall_similarity * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: "0.78rem", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                      {c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Quick Start Guide */}
+      {/* Getting Started Guide */}
       {stats.course_count === 0 && (
-        <div className="card" style={{ background: "var(--primary-light)", borderColor: "var(--primary)" }}>
-          <h2>Getting Started</h2>
-          <ol style={{ paddingLeft: 20, lineHeight: 2, color: "var(--text-secondary)" }}>
-            <li>Go to <strong>Import from Universities</strong> to import courses from GTU, ITU, METU, Hacettepe, or IYTE</li>
-            <li>Or <strong>Add Course</strong> manually by pasting a syllabus</li>
-            <li>Use <strong>Compare Syllabus</strong> to check overlap with stored courses</li>
-            <li>Use <strong>Cross-University</strong> to compare across multiple universities</li>
+        <div className="start-banner">
+          <h2>🚀 Getting Started</h2>
+          <ol className="start-steps">
+            {[
+              <>Go to <strong>Import from Universities</strong> to bulk-import courses from GTU, ITU, METU, Hacettepe, or IYTE</>,
+              <>Or use <strong>Add Course</strong> to manually paste a syllabus</>,
+              <>Run <strong>Compare Syllabus</strong> to detect overlap with stored courses</>,
+              <>Use <strong>Cross-University</strong> to benchmark across multiple institutions</>,
+            ].map((step, i) => (
+              <li key={i} className="start-step">
+                <span className="start-step-num">{i + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
           </ol>
         </div>
       )}
     </>
+  );
+}
+
+function StatCard({ icon, value, label, className = "primary" }) {
+  return (
+    <div className="stat-card">
+      <span className="stat-card-icon">{icon}</span>
+      <div className={`stat-value ${className}`}>{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
   );
 }
 

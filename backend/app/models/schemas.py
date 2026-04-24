@@ -133,6 +133,7 @@ class ComparisonResponse(BaseModel):
     confidence: str = "medium"  # "high" | "medium" | "low"
     threshold: float = 0.70
     threshold_profile: str = "balanced"
+    detected_language: Optional[str] = None  # e.g. "en", "tr", "unknown"
     top_courses: list[TopCourseMatch]
     section_matches: list[SectionMatchOut]
     report_summary: str

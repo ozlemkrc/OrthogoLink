@@ -5,7 +5,8 @@ Includes CRUD, search, filtering, and dashboard statistics.
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, distinct
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.security import require_admin
 from app.models.course import Course, CourseSection, ComparisonResult, User
@@ -152,6 +153,26 @@ async def delete_course(
     if not deleted:
         raise HTTPException(status_code=404, detail="Course not found")
     await course_service.rebuild_faiss_index(db)
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[int]
+
+
+@router.post("/bulk-delete", status_code=status.HTTP_200_OK)
+async def bulk_delete_courses(
+    body: BulkDeleteRequest,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Delete multiple courses by ID and rebuild FAISS index once."""
+    deleted_count = 0
+    for course_id in body.ids:
+        if await course_service.delete_course(db, course_id):
+            deleted_count += 1
+    await db.commit()
+    await course_service.rebuild_faiss_index(db)
+    return {"deleted": deleted_count}
 
 
 @router.post("/rebuild-index", status_code=status.HTTP_200_OK)

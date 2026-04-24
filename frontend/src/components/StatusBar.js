@@ -13,40 +13,63 @@ function StatusBar() {
       const res = await healthCheck();
       setStatus(res);
     } catch (err) {
-      const msg = err.response?.data?.detail || err.message || "Health check failed";
-      setError(msg);
+      setError(err.response?.data?.detail || err.message || "Backend unreachable");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  const badgeColor = status?.status === "healthy" ? "badge-unique" : "badge-overlap";
+  const isHealthy = status?.status === "healthy";
 
   return (
     <div className="status-bar">
       <div className="status-left">
-        <span className={`badge ${badgeColor}`} style={{ marginRight: 8 }}>
-          {status?.status || "Unknown"}
-        </span>
-        {loading && <span className="spinner" style={{ width: 14, height: 14 }} />}
-        {!loading && status && (
+        {loading ? (
+          <span className="status-pill">
+            <span className="spinner" style={{ width: 12, height: 12, borderTopColor: "var(--primary)" }} />
+            Connecting…
+          </span>
+        ) : error ? (
+          <span className="status-pill">
+            <span className="status-dot error" />
+            Offline — {error}
+          </span>
+        ) : status ? (
           <>
-            <span>Model: {status.model}</span>
-            <span>Threshold: {(status.similarity_threshold * 100).toFixed(0)}%</span>
-            <span>Courses: {status.course_count}</span>
-            <span>Sections: {status.section_count}</span>
-            <span>Index Vectors: {status.index_vectors}</span>
+            <span className="status-pill">
+              <span className={`status-dot ${isHealthy ? "healthy" : "error"}`} />
+              {isHealthy ? "Healthy" : status.status}
+            </span>
+            <span className="status-pill">
+              <span>🤖</span>
+              <strong>{status.model}</strong>
+            </span>
+            <span className="status-pill">
+              Threshold <strong>{(status.similarity_threshold * 100).toFixed(0)}%</strong>
+            </span>
+            <span className="status-pill">
+              <strong>{status.course_count}</strong> courses
+            </span>
+            <span className="status-pill">
+              <strong>{status.section_count}</strong> sections
+            </span>
+            <span className="status-pill">
+              <strong>{status.index_vectors}</strong> vectors
+            </span>
           </>
-        )}
-        {!loading && error && <span className="error-text">{error}</span>}
+        ) : null}
       </div>
+
       <div className="status-actions">
-        <button className="btn" style={{ padding: "6px 12px" }} onClick={load}>
-          Refresh
+        <button
+          className="btn-sm btn-ghost"
+          onClick={load}
+          disabled={loading}
+          title="Refresh backend status"
+        >
+          {loading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : "↻"} Refresh
         </button>
       </div>
     </div>

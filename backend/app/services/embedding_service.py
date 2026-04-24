@@ -20,7 +20,7 @@ class EmbeddingService:
     def __init__(self):
         self.model: SentenceTransformer = None
         self.index: faiss.IndexFlatIP = None  # Inner-product (cosine after normalization)
-        self.dimension: int = 384  # all-MiniLM-L6-v2 output dimension
+        self.dimension: int = 384  # paraphrase-multilingual-MiniLM-L12-v2 output dimension
         self.id_map: list[dict] = []  # Maps FAISS row index → section metadata
         self._index_path = settings.FAISS_INDEX_PATH
 
@@ -86,26 +86,49 @@ class EmbeddingService:
     # ── Persistence ─────────────────────────────────────────
 
     def save_index(self):
-        """Persist the FAISS index and metadata to disk."""
+        """Persist the FAISS index and metadata (with model name) to disk."""
         os.makedirs(os.path.dirname(self._index_path), exist_ok=True)
         if self.index is not None:
             faiss.write_index(self.index, f"{self._index_path}.faiss")
             with open(f"{self._index_path}.meta", "wb") as f:
-                pickle.dump(self.id_map, f)
+                pickle.dump({"id_map": self.id_map, "model_name": settings.MODEL_NAME}, f)
             logger.info(f"FAISS index saved to {self._index_path}")
 
-    def load_index(self):
-        """Load a persisted FAISS index from disk."""
+    def load_index(self) -> bool:
+        """
+        Load a persisted FAISS index from disk.
+        Returns False (triggering re-embed) if the saved model name differs from the
+        current model — prevents stale embeddings after a model upgrade.
+        """
         faiss_path = f"{self._index_path}.faiss"
         meta_path = f"{self._index_path}.meta"
-        if os.path.exists(faiss_path) and os.path.exists(meta_path):
-            self.index = faiss.read_index(faiss_path)
-            with open(meta_path, "rb") as f:
-                self.id_map = pickle.load(f)
-            logger.info(f"FAISS index loaded: {self.index.ntotal} vectors")
-            return True
-        logger.info("No saved FAISS index found")
-        return False
+        if not (os.path.exists(faiss_path) and os.path.exists(meta_path)):
+            logger.info("No saved FAISS index found")
+            return False
+
+        self.index = faiss.read_index(faiss_path)
+        with open(meta_path, "rb") as f:
+            data = pickle.load(f)
+
+        # Support legacy format (plain list) and new dict format
+        if isinstance(data, list):
+            saved_model = ""
+            self.id_map = data
+        else:
+            saved_model = data.get("model_name", "")
+            self.id_map = data["id_map"]
+
+        if saved_model != settings.MODEL_NAME:
+            logger.warning(
+                f"Embedding model changed: '{saved_model}' → '{settings.MODEL_NAME}'. "
+                "Discarding stale index; will re-embed all sections."
+            )
+            self.index = None
+            self.id_map = []
+            return False
+
+        logger.info(f"FAISS index loaded: {self.index.ntotal} vectors (model={saved_model})")
+        return True
 
 
 # Module-level singleton

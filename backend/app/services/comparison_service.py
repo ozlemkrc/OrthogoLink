@@ -6,6 +6,12 @@ import logging
 import re
 from collections import defaultdict
 from typing import List, Optional
+try:
+    from langdetect import detect as _langdetect, LangDetectException
+    _LANGDETECT_AVAILABLE = True
+except ImportError:
+    _LANGDETECT_AVAILABLE = False
+
 from app.services.embedding_service import embedding_service
 from app.services.pdf_service import split_into_sections
 from app.core.config import get_settings
@@ -60,9 +66,17 @@ AMBIGUOUS_PREFIX_MAP = {
 }
 
 STOPWORDS = {
+    # English
     "introduction", "intro", "to", "and", "of", "in", "for", "the", "with", "on",
-    "ders", "giriş", "ile", "ve", "bir", "that", "this", "course", "analysis",
-    "ects", "akts", "syllabus", "weekly", "haftalık",
+    "that", "this", "course", "analysis", "ects", "syllabus", "weekly", "from",
+    "have", "been", "will", "after", "basic", "given", "using", "such", "each",
+    "also", "used", "well", "part", "able", "include", "various", "these",
+    # Turkish
+    "ders", "giriş", "ile", "ve", "bir", "akts", "haftalık", "olan", "olarak",
+    "içinde", "için", "üzerine", "konular", "konu", "temel", "genel", "çeşitli",
+    "bazı", "diğer", "gibi", "kadar", "daha", "sonra", "önce", "veya", "hem",
+    "ancak", "olan", "olup", "yapılır", "edilir", "verilir", "tanıtır",
+    "öğrenme", "çıktıları", "amaçları", "hedefleri", "tanımı", "içeriği",
 }
 
 
@@ -99,8 +113,8 @@ def compare_syllabus(
                 continue
 
             if university_filter:
-                code_upper = result["course_code"].upper()
-                if not any(code_upper.startswith(p.upper()) for p in university_filter):
+                course_uni = (result.get("university") or "").strip().lower()
+                if not any(f.lower() in course_uni or course_uni in f.lower() for f in university_filter):
                     continue
 
             if department_filter:
@@ -231,10 +245,22 @@ def compare_syllabus(
         confidence=confidence,
         threshold=round(threshold, 4),
         threshold_profile=profile_name,
+        detected_language=_detect_language(text),
         top_courses=top_courses[:10],
         section_matches=all_section_matches,
         report_summary=report,
     )
+
+
+def _detect_language(text: str) -> str:
+    """Return ISO 639-1 language code for the input text, or 'unknown'."""
+    if not _LANGDETECT_AVAILABLE or not text or len(text.strip()) < 20:
+        return "unknown"
+    try:
+        lang = _langdetect(text[:2000])
+        return lang
+    except Exception:
+        return "unknown"
 
 
 def _classify_overlap(overlap_pct: float) -> str:

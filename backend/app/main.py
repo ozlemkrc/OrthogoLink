@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.database import init_db, async_session
 from app.api.routes import courses, compare, import_courses, auth
 from app.services.embedding_service import embedding_service
-from app.services.course_service import rebuild_faiss_index
+from app.services.course_service import rebuild_faiss_index, reembed_all_sections
 from app.models.course import Course, CourseSection
 
 logging.basicConfig(
@@ -53,11 +53,12 @@ async def lifespan(app: FastAPI):
     # Initialize database tables
     await init_db()
 
-    # Try to load existing FAISS index
+    # Try to load existing FAISS index.
+    # load_index() returns False if the index is missing OR if the saved model
+    # name doesn't match the current model (stale embeddings after a model upgrade).
     if not embedding_service.load_index():
-        # If no saved index, rebuild from DB
         async with async_session() as db:
-            await rebuild_faiss_index(db)
+            await reembed_all_sections(db)
 
     # Seed sample data if empty
     await seed_database()
