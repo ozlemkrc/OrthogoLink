@@ -13,4 +13,9 @@ numpy==1.26.4
 beautifulsoup4==4.12.3
 requests==2.31.0
 lxml==5.1.0
-aiohttp==3.9.3
+aiohttp>=3.10.0
+langdetect==1.0.9
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+# google-genai removed — Gemini called via REST (aiohttp already present)

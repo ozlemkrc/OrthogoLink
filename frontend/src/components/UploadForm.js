@@ -27,6 +27,10 @@ function UploadForm({ onResult }) {
   const [universities, setUniversities] = useState([]);
   const [departments, setDepartments] = useState([]);
 
+  // AI explanation options
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiLanguage, setAiLanguage] = useState("tr");
+
   const fileRef = useRef();
 
   useEffect(() => {
@@ -42,6 +46,7 @@ function UploadForm({ onResult }) {
     onResult(null);
 
     try {
+      const aiOptions = { includeAiExplanations: aiEnabled, explanationLanguage: aiLanguage };
       let result;
       if (mode === "text") {
         if (text.trim().length < 50) {
@@ -54,9 +59,10 @@ function UploadForm({ onResult }) {
             text,
             uniFilter  ? [uniFilter]  : null,
             deptFilter ? [deptFilter] : null,
+            aiOptions,
           );
         } else {
-          result = await compareText(text);
+          result = await compareText(text, aiOptions);
         }
       } else {
         if (!file) {
@@ -64,7 +70,7 @@ function UploadForm({ onResult }) {
           setLoading(false);
           return;
         }
-        result = await comparePdf(file);
+        result = await comparePdf(file, aiOptions);
       }
       onResult(result);
     } catch (err) {
@@ -205,6 +211,48 @@ function UploadForm({ onResult }) {
           </div>
         )}
       </div>}
+
+      {/* AI explanation controls */}
+      <div style={{
+        marginTop: 14,
+        padding: "12px 16px",
+        background: "var(--surface-alt)",
+        borderRadius: "var(--radius)",
+        border: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        flexWrap: "wrap",
+      }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontWeight: 500, fontSize: "0.88rem" }}>
+          <input
+            type="checkbox"
+            checked={aiEnabled}
+            onChange={(e) => setAiEnabled(e.target.checked)}
+            style={{ width: 15, height: 15, cursor: "pointer" }}
+          />
+          Generate AI explanation for details
+        </label>
+        {aiEnabled && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label className="add-course-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Language:</label>
+            <select
+              className="input"
+              value={aiLanguage}
+              onChange={(e) => setAiLanguage(e.target.value)}
+              style={{ padding: "3px 8px", fontSize: "0.85rem", minWidth: 80 }}
+            >
+              <option value="tr">TR — Türkçe</option>
+              <option value="en">EN — English</option>
+            </select>
+          </div>
+        )}
+        {aiEnabled && (
+          <span style={{ fontSize: "0.76rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
+            Requires AI_API_KEY configured on the server
+          </span>
+        )}
+      </div>
 
       {error && (
         <div className="error-msg" role="alert">

@@ -1495,6 +1495,74 @@ tbody tr.row-overlap:hover {
   gap: 14px;
 }
 
+/* AI Explanation block inside CourseDetailPanel */
+.ai-explanation-block {
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: var(--radius);
+}
+
+.ai-explanation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ai-explanation-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+}
+
+.ai-explanation-text {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.ai-explanation-list {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-explanation-list li::marker {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.ai-explanation-list strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ai-source-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+.ai-source-ai {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+}
+
+.ai-source-fallback {
+  background: color-mix(in srgb, var(--warning, #e8a020) 15%, transparent);
+  color: var(--warning, #c07010);
+}
+
 .detail-meta {
   display: flex;
   flex-wrap: wrap;

@@ -252,6 +252,38 @@ function ResultsDisplay({ data }) {
   );
 }
 
+function renderInlineMarkdown(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
+function AiExplanationText({ text }) {
+  if (!text) return null;
+
+  const cleaned = text.replace(/\s+(\d+\.\s\*\*)/g, "\n$1").trim();
+  const items = cleaned.split(/\n(?=\d+\.\s)/).map((s) => s.trim()).filter(Boolean);
+
+  const isNumberedList = items.length > 1 && items.every((s) => /^\d+\.\s/.test(s));
+
+  if (!isNumberedList) {
+    return <p className="ai-explanation-text">{renderInlineMarkdown(text)}</p>;
+  }
+
+  return (
+    <ol className="ai-explanation-list">
+      {items.map((item, i) => {
+        const body = item.replace(/^\d+\.\s/, "");
+        return <li key={i}>{renderInlineMarkdown(body)}</li>;
+      })}
+    </ol>
+  );
+}
+
 function SectionDetailPanel({ match, detail }) {
   return (
     <div className="detail-panel">
@@ -284,8 +316,27 @@ function SectionDetailPanel({ match, detail }) {
 }
 
 function CourseDetailPanel({ detail }) {
+  const sourceLabel = {
+    ai: "AI",
+    ai_cached: "AI (cached)",
+    fallback: "Auto-generated",
+  }[detail.explanation_source] || null;
+
   return (
     <div className="detail-panel">
+      {detail.ai_explanation && (
+        <div className="ai-explanation-block">
+          <div className="ai-explanation-header">
+            <span className="ai-explanation-label">AI explanation (based on matched evidence)</span>
+            {sourceLabel && (
+              <span className={`ai-source-badge ${detail.explanation_source === "fallback" ? "ai-source-fallback" : "ai-source-ai"}`}>
+                {sourceLabel}
+              </span>
+            )}
+          </div>
+          <AiExplanationText text={detail.ai_explanation} />
+        </div>
+      )}
       <div className="detail-meta">
         <span>Best section similarity: <strong>{(detail.best_similarity * 100).toFixed(1)}%</strong></span>
         <span>Contributing matches: <strong>{detail.match_count}</strong></span>

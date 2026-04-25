@@ -79,6 +79,8 @@ class CourseListOut(BaseModel):
 class CompareTextRequest(BaseModel):
     text: str
     threshold_profile: Optional[str] = None  # "strict" | "balanced" | "lenient"
+    include_ai_explanations: bool = False
+    explanation_language: Optional[str] = None  # "tr" | "en"
 
 
 class SectionMatchDetail(BaseModel):
@@ -113,6 +115,9 @@ class TopCourseDetail(BaseModel):
     threshold: float
     shared_keywords: list[str] = []
     contributing_matches: list[TopCourseContribution] = []
+    ai_explanation: Optional[str] = None
+    explanation_source: str = "rule"  # "ai" | "ai_cached" | "fallback" | "rule"
+    ai_language: Optional[str] = None
 
 
 class TopCourseMatch(BaseModel):

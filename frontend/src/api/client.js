@@ -85,25 +85,54 @@ export async function fetchDashboardStats() {
 
 // -- Comparison --
 
-export async function compareText(text) {
-  const res = await client.post("/compare/text", { text });
+/**
+ * @param {string} text
+ * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string }} [options]
+ */
+export async function compareText(text, options = {}) {
+  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null } = options;
+  const body = { text };
+  if (thresholdProfile) body.threshold_profile = thresholdProfile;
+  if (includeAiExplanations) body.include_ai_explanations = true;
+  if (explanationLanguage) body.explanation_language = explanationLanguage;
+  const res = await client.post("/compare/text", body);
   return res.data;
 }
 
-export async function comparePdf(file) {
+/**
+ * @param {File} file
+ * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string }} [options]
+ */
+export async function comparePdf(file, options = {}) {
+  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null } = options;
   const form = new FormData();
   form.append("file", file);
+  const params = {};
+  if (thresholdProfile) params.threshold_profile = thresholdProfile;
+  if (includeAiExplanations) params.include_ai_explanations = true;
+  if (explanationLanguage) params.explanation_language = explanationLanguage;
   const res = await client.post("/compare/pdf", form, {
     headers: { "Content-Type": "multipart/form-data" },
+    params,
   });
   return res.data;
 }
 
-export async function crossUniversityCompare(text, universityFilter = null, departmentFilter = null) {
+/**
+ * @param {string} text
+ * @param {string[]|null} universityFilter
+ * @param {string[]|null} departmentFilter
+ * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string }} [options]
+ */
+export async function crossUniversityCompare(text, universityFilter = null, departmentFilter = null, options = {}) {
+  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null } = options;
   const res = await client.post("/compare/cross-university", {
     text,
     university_filter: universityFilter,
     department_filter: departmentFilter,
+    ...(thresholdProfile ? { threshold_profile: thresholdProfile } : {}),
+    ...(includeAiExplanations ? { include_ai_explanations: true } : {}),
+    ...(explanationLanguage ? { explanation_language: explanationLanguage } : {}),
   });
   return res.data;
 }
