@@ -106,11 +106,29 @@ def _build_insight_prompt(
 
     if language == "tr":
         if is_cross_university:
-            q4 = "4. **Kıyaslama içgörüsü:** Bu örtüşme, söz konusu konunun farklı üniversitelerde nasıl ele alındığı hakkında ne söylüyor? Yeni ders, mevcut yaklaşımlardan nasıl farklılaşabilir?"
-        else:
-            q4 = "4. **Komite önerisi:** Tek ve somut eylem önerisi (birleştir / ön koşul yap / kapsam daralt / farklılaştır)."
+            return f"""Sen deneyimli bir müfredat danışmanısın. Bir öğretim üyesi, kendi üniversitesine yeni bir ders eklemeyi planlıyor ve başka üniversitelerde benzer derslerin zaten var olup olmadığını araştırıyor.
 
-        return f"""Sen Türkiye'deki bir üniversitede görev yapan deneyimli bir müfredat komitesi danışmanısın.
+Önerilen yeni ders izlencesi, başka bir üniversitedeki şu dersle **{overlap_severity} örtüşüyor**:
+
+**Karşılaştırılan ders:** {course_code} — {course_name} ({university})
+
+**Örtüşen bölüm çiftleri** (önerilen ders ↔ karşılaştırılan ders):
+{pair_lines}
+
+**Ortak akademik terminoloji:** {kw_str}
+
+---
+
+Bu verileri analiz et ve şu dört soruyu yanıtla. **Sayıları, yüzdeleri veya bölüm kodlarını tekrarlama** — bunları kullanıcı zaten görüyor.
+
+1. **Akademik alan:** Bu bölüm adları ve terminoloji hangi alt disiplini temsil ediyor?
+2. **Standart kapsam:** Bu benzerlik, söz konusu konunun üniversitelerde yaygın biçimde nasıl öğretildiğini gösteriyor; bu alanda standart kabul gören konular neler?
+3. **Farklılaşma fırsatı:** Önerilen ders, {university}'deki mevcut yaklaşımın ele almadığı hangi özgün açıyı veya derinliği sunabilir?
+4. **Devam kararı:** Bu karşılaştırmaya dayanarak, yeni dersin eklenmesi desteklenebilir mi — ve eğer öyleyse, onu neden değerli kılar?
+
+3-5 cümle, akıcı akademik dil."""
+        else:
+            return f"""Sen Türkiye'deki bir üniversitede görev yapan deneyimli bir müfredat komitesi danışmanısın.
 
 Değerlendirilen yeni ders izlencesi, aşağıdaki kayıtlı dersle **{overlap_severity} örtüşüyor**:
 
@@ -128,14 +146,32 @@ Bu verileri analiz et ve şu dört soruyu yanıtla. **Sayıları, yüzdeleri vey
 1. **Akademik alan:** Bu bölüm adları ve terminoloji hangi alt disiplini temsil ediyor?
 2. **Örtüşmenin niteliği:** Temel içerik tekrarı mı, ön koşul ilişkisi mi, yoksa yöntemsel örtüşme mi?
 3. **Öğrenci üzerindeki etki:** Her iki dersi alan bir öğrenci hangi konuları iki kez öğrenir?
-{q4}
+4. **Komite önerisi:** Tek ve somut eylem önerisi (birleştir / ön koşul yap / kapsam daralt / farklılaştır).
 
 3-5 cümle, akıcı akademik dil."""
 
     if is_cross_university:
-        q4 = "4. **Benchmark insight:** What does this overlap reveal about how this topic is approached across institutions? How could the new course differentiate itself from the existing offerings?"
-    else:
-        q4 = "4. **Committee recommendation:** One concrete action (merge / set as prerequisite / narrow scope / differentiate)."
+        return f"""You are an experienced curriculum advisor. A faculty member is planning to propose a new course at their university and is checking whether similar courses already exist at other institutions.
+
+The proposed new course syllabus **{overlap_severity} overlaps** with the following course at another university:
+
+**Compared course:** {course_code} — {course_name} ({university})
+
+**Overlapping section pairs** (proposed course ↔ compared course):
+{pair_lines}
+
+**Shared academic terminology:** {kw_str}
+
+---
+
+Analyze this and answer the four questions below. **Do NOT restate numbers, percentages, or section codes** — the user already sees those.
+
+1. **Academic domain:** What sub-discipline do these section names and terminology represent?
+2. **Standard coverage:** What does this similarity reveal about how this topic is commonly taught across universities — what topics are considered standard in this area?
+3. **Differentiation opportunity:** What unique angle or depth could the proposed course offer that the existing course at {university} does not address?
+4. **Proceed decision:** Based on this comparison, is adding the new course justifiable — and if so, what would make it worthwhile?
+
+3-5 sentences in fluent academic prose."""
 
     return f"""You are an experienced curriculum committee advisor at a university.
 
@@ -155,7 +191,7 @@ Analyze this and answer the four questions below. **Do NOT restate numbers, perc
 1. **Academic domain:** What sub-discipline do these section names and terminology represent?
 2. **Nature of overlap:** Core content redundancy, prerequisite relationship, or methodological overlap?
 3. **Student impact:** What specific topics would a student learn twice if taking both courses?
-{q4}
+4. **Committee recommendation:** One concrete action (merge / set as prerequisite / narrow scope / differentiate).
 
 3-5 sentences in fluent academic prose."""
 
@@ -265,3 +301,170 @@ async def generate_ai_explanation(
         course_code, course_name, average_similarity,
         detail.match_count, detail.shared_keywords, language,
     ), "low", "fallback"
+
+
+MAX_SUMMARY_COURSES = 8
+
+
+def _build_summary_prompt(top_courses: list, overlap_class: str, language: str, is_cross_university: bool) -> str:
+    course_lines = []
+    all_keywords: set[str] = set()
+    for c in top_courses[:MAX_SUMMARY_COURSES]:
+        status = "OVERLAP" if c.is_overlap else "similar"
+        uni = c.matched_university or "Unknown"
+        kws = (c.details.shared_keywords or []) if c.details else []
+        all_keywords.update(kws[:6])
+        course_lines.append(
+            f"  • {c.course_code} — {c.course_name} ({uni}) [{status}]"
+        )
+
+    courses_block = "\n".join(course_lines) or "  • (no courses)"
+    kw_str = ", ".join(list(all_keywords)[:MAX_KEYWORDS]) or "(none)"
+
+    overlap_count = sum(1 for c in top_courses if c.is_overlap)
+
+    if language == "tr":
+        if is_cross_university:
+            return f"""Sen deneyimli bir müfredat danışmanısın. Bir öğretim üyesi, kendi üniversitesine yeni bir ders eklemeyi planlıyor ve başka üniversitelerdeki benzer dersleri araştırıyor.
+
+Otomatik analiz şu sonuçları döndürdü ({overlap_count} örtüşme tespit edildi):
+
+{courses_block}
+
+Alanda öne çıkan ortak terminoloji: {kw_str}
+
+---
+
+Bu sonuçların tümünü birlikte değerlendirerek 4-6 cümlelik akıcı, bütünleşik bir analiz yaz. Şu soruları yanıtla:
+- Bu eşleşmeler bir araya geldiğinde hangi akademik alanı ve yaygın içeriği temsil ediyor?
+- Bu konu, farklı üniversitelerde genellikle nasıl yapılandırılıyor?
+- Önerilen yeni dersin doldurabileceği boşluk veya farklılaşma fırsatı var mı?
+- Genel değerlendirme: bu ders eklenmeye değer mi, ve öyleyse neyi farklı yapmalı?
+
+Sayıları, yüzdeleri veya ders kodlarını tekrarlama — bunları kullanıcı zaten görüyor."""
+        else:
+            return f"""Sen deneyimli bir müfredat komitesi danışmanısın. Yeni bir ders teklifi mevcut müfredata karşı değerlendirildi.
+
+Analiz şu eşleşmeleri buldu ({overlap_count} örtüşme tespit edildi):
+
+{courses_block}
+
+Alanda öne çıkan ortak terminoloji: {kw_str}
+
+---
+
+Bu sonuçların tümünü birlikte değerlendirerek 4-6 cümlelik akıcı, bütünleşik bir analiz yaz. Şu soruları yanıtla:
+- Bu eşleşmeler hangi ortak akademik alanı temsil ediyor?
+- Örtüşmenin niteliği nedir — içerik tekrarı mı, ön koşul ilişkisi mi, yoksa yöntemsel benzerlik mi?
+- Sorunun kapsamı nedir — münferit bir çakışma mı, yoksa daha geniş bir müfredat sorunu mu?
+- Komite için tek ve net bir eylem önerisi.
+
+Sayıları, yüzdeleri veya ders kodlarını tekrarlama — bunları kullanıcı zaten görüyor."""
+
+    if is_cross_university:
+        return f"""You are an experienced curriculum advisor. A faculty member is planning to propose a new course at their university and has used an automated tool to find similar courses at other institutions.
+
+The analysis returned the following matches ({overlap_count} flagged as overlapping):
+
+{courses_block}
+
+Common academic terminology across matches: {kw_str}
+
+---
+
+Write a single cohesive analysis of 4-6 sentences covering all these results together. Address:
+- What academic area and common content do these matches collectively represent?
+- How is this topic typically structured across universities?
+- Is there a gap or differentiation opportunity the proposed course could fill?
+- Overall verdict: is adding this course justified, and if so, what should make it distinctive?
+
+Do NOT repeat course codes, numbers, or percentages — the user already sees those."""
+
+    return f"""You are an experienced curriculum committee advisor. A new course proposal has been evaluated against the existing course catalog.
+
+The analysis found the following matches ({overlap_count} flagged as overlapping):
+
+{courses_block}
+
+Common academic terminology across matches: {kw_str}
+
+---
+
+Write a single cohesive analysis of 4-6 sentences covering all these results together. Address:
+- What shared academic area do these matches represent?
+- What is the nature of the overlaps — content redundancy, prerequisite relationships, or methodological similarity?
+- What is the scope of the problem — an isolated duplication or a broader curriculum concern?
+- One clear committee recommendation.
+
+Do NOT repeat course codes, numbers, or percentages — the user already sees those."""
+
+
+async def generate_ai_summary(
+    top_courses: list,
+    overlap_class: str,
+    language: str = "tr",
+    is_cross_university: bool = False,
+) -> tuple[str, str]:
+    """
+    Returns (summary_text, source).
+    source: "ai" | "ai_cached" | "fallback"
+    Never raises.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if not top_courses:
+        return "", "fallback"
+
+    if not settings.AI_EXPLANATIONS_ENABLED or not settings.AI_API_KEY:
+        overlap_count = sum(1 for c in top_courses if c.is_overlap)
+        if language == "tr":
+            return f"{len(top_courses)} eşleşen ders bulundu, {overlap_count} tanesi örtüşme olarak işaretlendi.", "fallback"
+        return f"{len(top_courses)} matching course(s) found, {overlap_count} flagged as overlap.", "fallback"
+
+    cache_raw = "|".join(
+        f"{c.course_code}:{c.average_similarity:.2f}:{c.is_overlap}"
+        for c in top_courses[:MAX_SUMMARY_COURSES]
+    ) + f"|{overlap_class}|{language}|{is_cross_university}"
+    key = hashlib.sha256(cache_raw.encode()).hexdigest()
+
+    if key in _cache:
+        cached = _cache[key]
+        return cached["text"], "ai_cached"
+
+    prompt = _build_summary_prompt(top_courses, overlap_class, language, is_cross_university)
+    if len(prompt) > MAX_PROMPT_CHARS:
+        prompt = prompt[:MAX_PROMPT_CHARS - 1].rstrip() + "…"
+
+    last_exc: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            text = await _call_gemini(
+                api_key=settings.AI_API_KEY,
+                model=settings.AI_MODEL,
+                prompt=prompt,
+                timeout=float(settings.AI_TIMEOUT_SECONDS),
+            )
+            _cache[key] = {"text": text}
+            return text, "ai"
+        except asyncio.TimeoutError as exc:
+            logger.warning("Gemini summary timed out")
+            last_exc = exc
+            break
+        except Exception as exc:
+            err = str(exc)
+            if "429" in err and attempt < 2:
+                m = re.search(r"retryDelay.*?(\d+)s", err)
+                wait = int(m.group(1)) + 1 if m else (5 * (attempt + 1))
+                logger.info("Gemini rate-limited on summary, retrying in %ds…", wait)
+                await asyncio.sleep(wait)
+                last_exc = exc
+            else:
+                logger.warning("Gemini summary failed: %s", exc)
+                last_exc = exc
+                break
+
+    overlap_count = sum(1 for c in top_courses if c.is_overlap)
+    if language == "tr":
+        return f"{len(top_courses)} eşleşen ders bulundu, {overlap_count} tanesi örtüşme olarak işaretlendi.", "fallback"
+    return f"{len(top_courses)} matching course(s) found, {overlap_count} flagged as overlap.", "fallback"

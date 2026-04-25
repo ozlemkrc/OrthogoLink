@@ -142,3 +142,5 @@ class ComparisonResponse(BaseModel):
     top_courses: list[TopCourseMatch]
     section_matches: list[SectionMatchOut]
     report_summary: str
+    ai_summary: Optional[str] = None
+    ai_summary_source: Optional[str] = None  # "ai" | "ai_cached" | "fallback"

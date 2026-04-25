@@ -8,7 +8,7 @@ function ResultsDisplay({ data }) {
 
   if (!data) return null;
 
-  const { overall_similarity, overlap_percentage, top_courses, section_matches, report_summary } = data;
+  const { overall_similarity, overlap_percentage, top_courses, section_matches, report_summary, ai_summary, ai_summary_source } = data;
 
   const downloadReport = () => {
     const blob = new Blob([report_summary], { type: "text/plain" });
@@ -68,6 +68,19 @@ function ResultsDisplay({ data }) {
           <div className="stat-label">Section Matches</div>
         </div>
       </div>
+
+      {/* AI Summary */}
+      {ai_summary && (
+        <div className="card ai-summary-card">
+          <div className="ai-summary-header">
+            <span className="ai-summary-label">AI Analysis</span>
+            {ai_summary_source && ai_summary_source !== "fallback" && (
+              <span className="ai-source-badge ai-source-ai">AI</span>
+            )}
+          </div>
+          <AiExplanationText text={ai_summary} />
+        </div>
+      )}
 
       {/* Top Matching Courses */}
       <div className="card">
@@ -316,27 +329,8 @@ function SectionDetailPanel({ match, detail }) {
 }
 
 function CourseDetailPanel({ detail }) {
-  const sourceLabel = {
-    ai: "AI",
-    ai_cached: "AI (cached)",
-    fallback: "Auto-generated",
-  }[detail.explanation_source] || null;
-
   return (
     <div className="detail-panel">
-      {detail.ai_explanation && (
-        <div className="ai-explanation-block">
-          <div className="ai-explanation-header">
-            <span className="ai-explanation-label">AI explanation (based on matched evidence)</span>
-            {sourceLabel && (
-              <span className={`ai-source-badge ${detail.explanation_source === "fallback" ? "ai-source-fallback" : "ai-source-ai"}`}>
-                {sourceLabel}
-              </span>
-            )}
-          </div>
-          <AiExplanationText text={detail.ai_explanation} />
-        </div>
-      )}
       <div className="detail-meta">
         <span>Best section similarity: <strong>{(detail.best_similarity * 100).toFixed(1)}%</strong></span>
         <span>Contributing matches: <strong>{detail.match_count}</strong></span>

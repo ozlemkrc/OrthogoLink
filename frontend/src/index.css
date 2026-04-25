@@ -1495,6 +1495,27 @@ tbody tr.row-overlap:hover {
   gap: 14px;
 }
 
+/* AI Summary card — one box for all results */
+.ai-summary-card {
+  border-left: 4px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+.ai-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ai-summary-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary);
+}
+
 /* AI Explanation block inside CourseDetailPanel */
 .ai-explanation-block {
   padding: 12px 14px;
