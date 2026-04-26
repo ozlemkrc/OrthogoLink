@@ -101,16 +101,18 @@ export async function compareText(text, options = {}) {
 
 /**
  * @param {File} file
- * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string }} [options]
+ * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string, universityFilter?: string[]|null, departmentFilter?: string[]|null }} [options]
  */
 export async function comparePdf(file, options = {}) {
-  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null } = options;
+  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null, universityFilter = null, departmentFilter = null } = options;
   const form = new FormData();
   form.append("file", file);
   const params = {};
   if (thresholdProfile) params.threshold_profile = thresholdProfile;
   if (includeAiExplanations) params.include_ai_explanations = true;
   if (explanationLanguage) params.explanation_language = explanationLanguage;
+  if (universityFilter?.length) params.university_filter = universityFilter;
+  if (departmentFilter?.length) params.department_filter = departmentFilter;
   const res = await client.post("/compare/pdf", form, {
     headers: { "Content-Type": "multipart/form-data" },
     params,

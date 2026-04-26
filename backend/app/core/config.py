@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     # FAISS index path
     FAISS_INDEX_PATH: str = "/app/data/faiss_index"
 
-    # Auth
-    SECRET_KEY: str = "orthogolink-secret-key-change-in-production"
+    # Auth — must be set via .env in any real deployment
+    SECRET_KEY: str = "orthogolink-dev-key-do-not-use-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
     # AI Explanations
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_TIMEOUT_SECONDS: int = 20
     AI_MAX_COURSES_PER_REQUEST: int = 3
-    AI_DEFAULT_LANGUAGE: str = "tr"
+    AI_DEFAULT_LANGUAGE: str = "en"
 
     class Config:
         env_file = ".env"

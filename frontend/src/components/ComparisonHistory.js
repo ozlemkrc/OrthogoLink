@@ -5,11 +5,14 @@ import { getSimilarityLevel } from "../utils/similarity";
 function ComparisonHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
     fetchComparisonHistory(30)
       .then(setHistory)
-      .catch(() => {})
+      .catch((err) => {
+        if (err.response?.status === 401) setAuthRequired(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -19,6 +22,19 @@ function ComparisonHistory() {
         <div className="loading-state">
           <div className="spinner-lg" />
           <p>Loading history…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authRequired) {
+    return (
+      <div className="card">
+        <h2>Comparison History</h2>
+        <div className="empty-state">
+          <span className="empty-icon">🔒</span>
+          <h3>Login required</h3>
+          <p>Please log in to view comparison history.</p>
         </div>
       </div>
     );

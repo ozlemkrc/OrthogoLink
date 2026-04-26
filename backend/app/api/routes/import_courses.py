@@ -68,8 +68,8 @@ async def get_departments(university_code: str):
         departments = await scraper.get_departments()
         return {"university": scraper.name, "departments": departments}
     except Exception as e:
-        logger.error(f"Error fetching departments for {university_code}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching departments for %s: %s", university_code, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch departments. The university site may be unavailable.")
 
 
 @router.post("/{university_code}/preview")
@@ -93,8 +93,8 @@ async def preview_courses(
             "courses": courses[:20],
         }
     except Exception as e:
-        logger.error(f"Error previewing courses for {university_code}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error previewing courses for %s: %s", university_code, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to preview courses. The university site may be unavailable.")
 
 
 @router.post("/{university_code}/import", response_model=ImportResponse)
@@ -161,7 +161,11 @@ async def import_courses(
                     skipped.append(label)
                     continue
 
-                await create_course(db, course_create)
+                # Use a savepoint so a constraint violation on this row
+                # (e.g. duplicate code from another university) only rolls
+                # back this one insert, leaving the outer transaction intact.
+                async with db.begin_nested():
+                    await create_course(db, course_create)
                 imported.append(label)
                 logger.info(f"Imported: {label}")
             except Exception as e:
@@ -187,9 +191,9 @@ async def import_courses(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during import from {university_code}: {str(e)}")
+        logger.error("Error during import from %s: %s", university_code, e, exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Import failed. Check server logs for details.")
 
 
 # Keep backward compatibility for GTU-specific endpoints

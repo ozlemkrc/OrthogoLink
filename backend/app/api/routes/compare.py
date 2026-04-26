@@ -4,7 +4,8 @@ Handles text input, PDF upload, and cross-university comparison.
 """
 import csv
 import io
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+import logging
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -13,7 +14,8 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.config import get_settings
-from app.models.course import Course, ComparisonResult, SectionMatch
+from app.core.security import get_current_user
+from app.models.course import Course, ComparisonResult, SectionMatch, User
 from app.models.schemas import CompareTextRequest, ComparisonResponse
 from app.services.comparison_service import compare_syllabus
 from app.services.pdf_service import extract_text_from_pdf
@@ -21,6 +23,7 @@ from app.services.llm_explanation_service import generate_ai_summary
 
 router = APIRouter(prefix="/compare", tags=["Comparison"])
 _settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 async def _add_ai_summary(
@@ -67,7 +70,8 @@ async def compare_text(request: CompareTextRequest, db: AsyncSession = Depends(g
         await _save_comparison(db, request.text, result)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
+        logger.error("Text comparison failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Comparison failed. Please try again.")
 
 
 @router.post("/pdf", response_model=ComparisonResponse)
@@ -76,6 +80,8 @@ async def compare_pdf(
     threshold_profile: Optional[str] = None,
     include_ai_explanations: bool = False,
     explanation_language: Optional[str] = None,
+    university_filter: Optional[List[str]] = Query(None),
+    department_filter: Optional[List[str]] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a PDF syllabus and compare against stored courses."""
@@ -92,20 +98,27 @@ async def compare_pdf(
                 detail="Could not extract enough text from the PDF.",
             )
 
-        result = compare_syllabus(text, threshold_profile=threshold_profile)
+        result = compare_syllabus(
+            text,
+            threshold_profile=threshold_profile,
+            university_filter=university_filter or None,
+            department_filter=department_filter or None,
+        )
         if include_ai_explanations:
             lang = explanation_language or _settings.AI_DEFAULT_LANGUAGE
-            await _add_ai_summary(result, lang)
+            is_cross = bool(university_filter or department_filter)
+            await _add_ai_summary(result, lang, is_cross_university=is_cross)
         await _save_comparison(db, text, result)
         return result
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF processing failed: {str(e)}")
+        logger.error("PDF comparison failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="PDF processing failed. Please try again.")
 
 
 @router.post("/cross-university", response_model=ComparisonResponse)
-async def compare_cross_university(request: CrossUniCompareRequest):
+async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSession = Depends(get_db)):
     """
     Compare syllabus against courses from specific universities.
     Filter by university code prefixes (e.g., BLM for GTU, CENG for METU/IYTE).
@@ -123,14 +136,20 @@ async def compare_cross_university(request: CrossUniCompareRequest):
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
             await _add_ai_summary(result, lang, is_cross_university=True)
+        await _save_comparison(db, request.text, result)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Cross-university comparison failed: {str(e)}")
+        logger.error("Cross-university comparison failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Comparison failed. Please try again.")
 
 
 @router.get("/history")
-async def get_comparison_history(db: AsyncSession = Depends(get_db), limit: int = 20):
-    """Get recent comparison history."""
+async def get_comparison_history(
+    db: AsyncSession = Depends(get_db),
+    limit: int = 20,
+    _user: User = Depends(get_current_user),
+):
+    """Get recent comparison history. Requires authentication."""
     result = await db.execute(
         select(ComparisonResult)
         .order_by(ComparisonResult.created_at.desc())
@@ -149,8 +168,12 @@ async def get_comparison_history(db: AsyncSession = Depends(get_db), limit: int 
 
 
 @router.get("/history/{comparison_id}")
-async def get_comparison_detail(comparison_id: int, db: AsyncSession = Depends(get_db)):
-    """Get detailed comparison result by ID."""
+async def get_comparison_detail(
+    comparison_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Get detailed comparison result by ID. Requires authentication."""
     from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(ComparisonResult)
@@ -271,7 +294,3 @@ async def _save_comparison(db: AsyncSession, text: str, result: ComparisonRespon
         await db.flush()
     except Exception as e:
         logger.warning(f"Failed to save comparison history: {e}")
-
-
-import logging
-logger = logging.getLogger(__name__)

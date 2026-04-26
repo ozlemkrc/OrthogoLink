@@ -109,6 +109,7 @@ async def fetch_with_retry(
     timeout: ClientTimeout,
     max_attempts: int = 3,
     connector: Optional[aiohttp.BaseConnector] = None,
+    encoding: Optional[str] = None,
 ) -> Optional[str]:
     """GET url with exponential backoff on transient errors."""
     last_err: Optional[str] = None
@@ -119,7 +120,7 @@ async def fetch_with_retry(
             ) as session:
                 async with session.get(url) as resp:
                     if resp.status == 200:
-                        return await resp.text()
+                        return await resp.text(encoding=encoding, errors="replace")
                     if resp.status in (429, 500, 502, 503, 504):
                         last_err = f"HTTP {resp.status}"
                     else:
@@ -568,29 +569,301 @@ class ITUScraper(UniversityScraper):
 
 
 # ═══════════════════════════════════════════════════════════
-# METU - seeded
+# METU - live scraper for catalog.metu.edu.tr
 # ═══════════════════════════════════════════════════════════
 class METUScraper(UniversityScraper):
-    parser_name = "metu-seed"
-    parser_version = "1.0.0"
+    """
+    Live scraper for METU (ODTÜ) academic catalog.
+
+    Program listing: https://catalog.metu.edu.tr/program.php?fac_prog=<id>
+      - Table rows with <td class="short_course"> hold a link to the course
+        detail page.  Columns: code, name, METU credit, hours, lab, ECTS.
+    Course detail: https://catalog.metu.edu.tr/course.php?prog=<id>&course_code=<num>
+      - <table class="course"> for metadata (ECTS, coordinator, semester, prereqs)
+      - <h3>Course Content</h3> followed by a plain-text sibling node
+      - Three <iframe> elements load objectives / learning outcomes from
+        odtusyllabus.metu.edu.tr (JavaScript-served, not scraped here)
+    """
+
+    parser_name = "metu-catalog"
+    parser_version = "2.0.0"
     BASE_URL = "https://catalog.metu.edu.tr"
+    CONCURRENCY = 4
+
+    PROGRAMS: Dict[str, Dict] = {
+        "CENG": {
+            "fac_prog": 571,
+            "name": "Computer Engineering",
+            "department": "Computer Engineering",
+            "faculty": "Faculty of Engineering",
+        },
+        "EEE": {
+            "fac_prog": 567,
+            "name": "Electrical and Electronics Engineering",
+            "department": "Electrical and Electronics Engineering",
+            "faculty": "Faculty of Engineering",
+        },
+        "IE": {
+            "fac_prog": 568,
+            "name": "Industrial Engineering",
+            "department": "Industrial Engineering",
+            "faculty": "Faculty of Engineering",
+        },
+        "ME": {
+            "fac_prog": 569,
+            "name": "Mechanical Engineering",
+            "department": "Mechanical Engineering",
+            "faculty": "Faculty of Engineering",
+        },
+    }
 
     def __init__(self):
         super().__init__("metu", "Orta Doğu Teknik Üniversitesi")
+        self.timeout = ClientTimeout(total=60)
+
+    async def fetch_page(self, url: str) -> Optional[str]:
+        return await fetch_with_retry(
+            url, headers=self.headers, timeout=self.timeout, encoding="iso-8859-9"
+        )
 
     async def get_departments(self) -> List[Dict[str, str]]:
-        return [
-            {"code": "CENG", "name": "Computer Engineering"},
-            {"code": "EEE", "name": "Electrical and Electronics Engineering"},
-            {"code": "IE", "name": "Industrial Engineering"},
-            {"code": "MATH", "name": "Mathematics"},
-            {"code": "STAT", "name": "Statistics"},
-        ]
+        return [{"code": code, "name": prog["name"]} for code, prog in self.PROGRAMS.items()]
 
     async def scrape_department_courses(
         self, dept_code: str, limit: Optional[int] = None
     ) -> List[Dict]:
-        return _METU_SEED.get(dept_code, [])
+        prog = self.PROGRAMS.get((dept_code or "").upper())
+        if not prog:
+            logger.warning(f"METU: unknown department '{dept_code}'")
+            return []
+
+        prog_url = f"{self.BASE_URL}/program.php?fac_prog={prog['fac_prog']}"
+        html = await self.fetch_page(prog_url)
+        if not html:
+            logger.error(f"METU: failed to fetch program page for {dept_code}")
+            return []
+
+        entries = self._parse_program_page(html)
+        logger.info(f"METU {dept_code}: found {len(entries)} courses in curriculum")
+
+        if limit:
+            entries = entries[:limit]
+
+        semaphore = asyncio.Semaphore(self.CONCURRENCY)
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(
+            timeout=self.timeout, headers=self.headers, connector=connector
+        ) as session:
+            tasks = [
+                self._scrape_course(session, semaphore, entry, prog)
+                for entry in entries
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        courses: List[Dict] = []
+        failed = 0
+        for r in results:
+            if isinstance(r, dict):
+                courses.append(r)
+            else:
+                failed += 1
+                if isinstance(r, Exception):
+                    logger.debug(f"METU: task raised {r}")
+
+        logger.info(f"METU {dept_code}: scraped {len(courses)} courses, {failed} failed/skipped")
+        return courses
+
+    # ---- program page parsing ----
+
+    def _parse_program_page(self, html: str) -> List[Dict]:
+        soup = BeautifulSoup(html, "html.parser")
+        entries: List[Dict] = []
+        seen: set = set()
+
+        for td in soup.find_all("td", class_="short_course"):
+            a = td.find("a")
+            if not a:
+                continue
+            href = a.get("href", "")
+            code = self.clean_text(a.get_text())
+            if not code or not href:
+                continue
+
+            m = re.search(r"course\.php\?prog=(\d+)&course_code=(\d+)", href)
+            if not m:
+                continue
+            prog_id, course_num = m.group(1), m.group(2)
+            if course_num in seen:
+                continue
+            seen.add(course_num)
+
+            name_td = td.find_next_sibling("td", class_="course")
+            name = self.clean_text(name_td.get_text()) if name_td else ""
+
+            ects = None
+            tr = td.parent
+            if tr:
+                tds = tr.find_all("td")
+                if tds:
+                    try:
+                        ects = float(self.clean_text(tds[-1].get_text()))
+                    except ValueError:
+                        pass
+
+            entries.append({
+                "code": code,
+                "name": name,
+                "ects": ects,
+                "url": f"{self.BASE_URL}/course.php?prog={prog_id}&course_code={course_num}",
+            })
+
+        return entries
+
+    # ---- per-course detail scraping ----
+
+    async def _scrape_course(
+        self,
+        session: aiohttp.ClientSession,
+        semaphore: asyncio.Semaphore,
+        entry: Dict,
+        prog: Dict,
+    ) -> Optional[Dict]:
+        async with semaphore:
+            html = await self._get_with_retry(session, entry["url"])
+            await asyncio.sleep(0.2)
+        if not html:
+            return None
+        try:
+            return self._parse_course_detail(entry, prog, html)
+        except Exception as exc:
+            logger.warning(f"METU: parse error for {entry['code']}: {exc}")
+            return None
+
+    async def _get_with_retry(
+        self, session: aiohttp.ClientSession, url: str, max_attempts: int = 3
+    ) -> Optional[str]:
+        last_err: Optional[str] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        return await resp.text(errors="replace")
+                    if resp.status in (429, 500, 502, 503, 504):
+                        last_err = f"HTTP {resp.status}"
+                    else:
+                        logger.warning(f"METU: GET {url} -> HTTP {resp.status}")
+                        return None
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                last_err = str(exc)
+            backoff = 0.6 * (2 ** (attempt - 1))
+            await asyncio.sleep(backoff)
+        logger.warning(f"METU: giving up on {url}: {last_err}")
+        return None
+
+    def _parse_course_detail(self, entry: Dict, prog: Dict, html: str) -> Optional[Dict]:
+        soup = BeautifulSoup(html, "html.parser")
+
+        h2 = soup.find("h2")
+        title = self.clean_text(h2.get_text()) if h2 else ""
+
+        ects = entry.get("ects")
+        coordinator = ""
+        semester = ""
+        prereq_text = ""
+
+        course_table = soup.find("table", class_="course")
+        if course_table:
+            for tr in course_table.find_all("tr"):
+                tds = tr.find_all("td")
+                if not tds:
+                    continue
+                b_tag = tds[0].find("b")
+                label = self.clean_text(tds[0].get_text()).lower()
+
+                if "ects credit" in label and len(tds) >= 2:
+                    try:
+                        ects = float(self.clean_text(tds[1].get_text()))
+                    except ValueError:
+                        pass
+                elif "coordinator" in label and len(tds) >= 2:
+                    coordinator = self.clean_text(tds[1].get_text())
+                elif "offered semester" in label and len(tds) >= 2:
+                    semester = self.clean_text(tds[1].get_text())
+                elif b_tag and "prerequisite" in b_tag.get_text().lower() and len(tds) >= 2:
+                    links = tds[1].find_all("a")
+                    if links:
+                        prereq_text = ", ".join(a.get_text(strip=True) for a in links)
+
+        # Course content is a plain-text NavigableString immediately after <h3>Course Content</h3>
+        content = ""
+        for h3 in soup.find_all("h3"):
+            if "course content" in h3.get_text().lower():
+                for sibling in h3.next_siblings:
+                    tag_name = getattr(sibling, "name", None)
+                    if tag_name in ("iframe", "h2", "h3"):
+                        break
+                    if tag_name is None:
+                        text = self.clean_text(str(sibling))
+                        if text:
+                            content = text
+                            break
+                    else:
+                        text = self.clean_text(sibling.get_text(" ", strip=True))
+                        if text:
+                            content = text
+                            break
+                break
+
+        if not title and not content:
+            logger.debug(f"METU: no content for {entry['code']}, skipping")
+            return None
+
+        description = self._compose_description(
+            title=title or entry["code"],
+            content=content,
+            ects=ects,
+            semester=semester,
+            prereq=prereq_text,
+            coordinator=coordinator,
+        )
+
+        return {
+            "code": entry["code"],
+            "name": entry.get("name") or title,
+            "department": prog["department"],
+            "faculty": prog["faculty"],
+            "credits": ects,
+            "description": description,
+            "source_url": entry["url"],
+        }
+
+    def _compose_description(
+        self,
+        title: str,
+        content: str,
+        ects,
+        semester: str,
+        prereq: str,
+        coordinator: str,
+    ) -> str:
+        parts = [f"Course: {title}"]
+
+        meta = []
+        if ects:
+            meta.append(f"ECTS: {ects}")
+        if semester:
+            meta.append(f"Offered: {semester}")
+        if meta:
+            parts.append(" | ".join(meta))
+
+        if content:
+            parts += ["\nCourse Content", content]
+        if prereq:
+            parts += ["\nPrerequisites", prereq]
+        if coordinator:
+            parts += ["\nCourse Coordinator", coordinator]
+
+        return "\n".join(parts).strip()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -975,68 +1248,6 @@ _ITU_SEED: Dict[str, List[Dict]] = {
                 "Course Content\n"
                 "Feedforward networks, backprop, optimization, regularization, CNNs, RNNs, "
                 "attention and transformers, GANs, VAEs, transfer learning."
-            ),
-        },
-    ],
-}
-
-_METU_SEED: Dict[str, List[Dict]] = {
-    "CENG": [
-        {
-            "code": "CENG213",
-            "name": "Data Structures",
-            "department": "Computer Engineering",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Fundamental data structures and algorithm analysis.\n\n"
-                "Course Content\n"
-                "ADTs, arrays, linked lists, stacks, queues, trees (BST, AVL, B-trees), heaps, "
-                "hashing, graphs (BFS, DFS), sorting algorithms."
-            ),
-        },
-        {
-            "code": "CENG315",
-            "name": "Algorithms",
-            "department": "Computer Engineering",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Design and analysis of algorithms.\n\n"
-                "Course Content\n"
-                "Divide and conquer, greedy algorithms, dynamic programming, graph algorithms, "
-                "NP-completeness, approximation algorithms."
-            ),
-        },
-    ],
-}
-
-_IYTE_SEED: Dict[str, List[Dict]] = {
-    "CENG": [
-        {
-            "code": "CENG213",
-            "name": "Data Structures and Algorithms",
-            "department": "Computer Engineering",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Fundamental data structures, algorithm analysis, and design techniques.\n\n"
-                "Course Content\n"
-                "Big-O, stacks, queues, linked lists, trees (BST, AVL, splay), heaps, hashing, "
-                "graphs (BFS, DFS, shortest paths, MST), sorting, divide and conquer, DP intro."
-            ),
-        },
-        {
-            "code": "CENG451",
-            "name": "Machine Learning",
-            "department": "Computer Engineering",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Machine learning theory and practice.\n\n"
-                "Course Content\n"
-                "Linear/logistic regression, Bayesian classification, k-NN, decision trees, "
-                "ensembles, SVM, neural networks, CNNs, RNNs, clustering, PCA, model selection."
             ),
         },
     ],

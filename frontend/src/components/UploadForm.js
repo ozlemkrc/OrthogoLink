@@ -29,7 +29,7 @@ function UploadForm({ onResult }) {
 
   // AI explanation options
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiLanguage, setAiLanguage] = useState("tr");
+  const [aiLanguage, setAiLanguage] = useState("en");
 
   const fileRef = useRef();
 
@@ -70,7 +70,11 @@ function UploadForm({ onResult }) {
           setLoading(false);
           return;
         }
-        result = await comparePdf(file, aiOptions);
+        result = await comparePdf(file, {
+          ...aiOptions,
+          universityFilter: uniFilter ? [uniFilter] : null,
+          departmentFilter: deptFilter ? [deptFilter] : null,
+        });
       }
       onResult(result);
     } catch (err) {
@@ -143,8 +147,8 @@ function UploadForm({ onResult }) {
         </label>
       )}
 
-      {/* Filter section — text mode only */}
-      {mode === "text" && <div style={{ marginTop: 14 }}>
+      {/* Filter section */}
+      <div style={{ marginTop: 14 }}>
         <button
           type="button"
           className="btn-sm btn-ghost"
@@ -210,7 +214,7 @@ function UploadForm({ onResult }) {
 
           </div>
         )}
-      </div>}
+      </div>
 
       {/* AI explanation controls */}
       <div style={{
@@ -246,11 +250,6 @@ function UploadForm({ onResult }) {
               <option value="en">EN — English</option>
             </select>
           </div>
-        )}
-        {aiEnabled && (
-          <span style={{ fontSize: "0.76rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
-            Requires AI_API_KEY configured on the server
-          </span>
         )}
       </div>
 
