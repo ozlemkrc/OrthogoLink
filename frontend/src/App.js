@@ -130,7 +130,7 @@ function App() {
           </>
         )}
 
-        {activeTab === "courses"   && <CourseList />}
+        {activeTab === "courses"   && <CourseList isAdmin={isAdmin} />}
         {activeTab === "add"       && isAdmin && <AddCourse />}
         {activeTab === "import"    && isAdmin && <ImportCourses />}
         {activeTab === "history"   && <ComparisonHistory />}

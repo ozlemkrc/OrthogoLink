@@ -46,10 +46,6 @@ UNIVERSITY_PREFIX_MAP = {
     "END": ("Gebze Teknik Üniversitesi", "Mühendislik Fakültesi"),
     "KIM": ("Gebze Teknik Üniversitesi", "Mühendislik Fakültesi"),
     "FIZ": ("Gebze Teknik Üniversitesi", "Temel Bilimler Fakültesi"),
-    "BLG": ("İstanbul Teknik Üniversitesi", "Bilgisayar ve Bilişim Fakültesi"),
-    "YZV": ("İstanbul Teknik Üniversitesi", "Bilgisayar ve Bilişim Fakültesi"),
-    "EHB": ("İstanbul Teknik Üniversitesi", "Elektrik-Elektronik Fakültesi"),
-    "KON": ("İstanbul Teknik Üniversitesi", "Elektrik-Elektronik Fakültesi"),
     "BBM": ("Hacettepe Üniversitesi", "Mühendislik Fakültesi"),
     "EEM": ("Hacettepe Üniversitesi", "Mühendislik Fakültesi"),
     "IST": ("Hacettepe Üniversitesi", "Fen Fakültesi"),
@@ -98,6 +94,7 @@ def compare_syllabus(
 
     # Raw results keyed per input section, to allow per-section dedup by course.
     per_section_best: dict[str, dict[str, SectionMatchOut]] = defaultdict(dict)
+    code_to_course_id: dict[str, int] = {}
 
     for section in input_sections:
         combined_text = f"{section['heading']}: {section['content']}"
@@ -172,6 +169,9 @@ def compare_syllabus(
             if not existing or match.similarity > existing.similarity:
                 bucket[result["course_code"]] = match
 
+            if result.get("course_id") is not None:
+                code_to_course_id[result["course_code"]] = result["course_id"]
+
     # Flatten + per-section top-k prune to reduce report noise.
     all_section_matches: list[SectionMatchOut] = []
     for heading, course_bucket in per_section_best.items():
@@ -194,6 +194,7 @@ def compare_syllabus(
         faculties = [m.matched_faculty for m in matches if m.matched_faculty]
         explanation = _course_level_explanation(sorted_matches, threshold)
         top_courses.append(TopCourseMatch(
+            course_id=code_to_course_id.get(code),
             course_code=code,
             course_name=matches[0].matched_course_name,
             matched_university=_most_common(universities),

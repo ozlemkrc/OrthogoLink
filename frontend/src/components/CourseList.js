@@ -9,7 +9,7 @@ import {
   updateCourse,
 } from "../api/client";
 
-function CourseList() {
+function CourseList({ isAdmin = false }) {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -165,7 +165,7 @@ function CourseList() {
       </div>
 
       {/* Bulk actions */}
-      {courses.length > 0 && (
+      {isAdmin && courses.length > 0 && (
         <div className="card" style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 18px" }}>
           <input
             type="checkbox"
@@ -227,27 +227,33 @@ function CourseList() {
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(course.id)}
-                        onChange={() => toggleSelect(course.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ accentColor: "var(--primary)", width: 15, height: 15 }}
-                      />
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(course.id)}
+                          onChange={() => toggleSelect(course.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ accentColor: "var(--primary)", width: 15, height: 15 }}
+                        />
+                      )}
                       <span className="code">{course.code}</span>
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <button className="btn-sm btn-ghost" onClick={() => handleExpand(course.id)}>
                         {expandedId === course.id ? "▲" : "▼"}
                       </button>
-                      <button className="btn-sm btn-ghost" onClick={() => handleEdit(course)}>✎</button>
-                      <button
-                        className="btn-sm btn-ghost"
-                        style={{ color: "var(--danger)", borderColor: "transparent" }}
-                        onClick={() => handleDelete(course.id, course.code)}
-                      >
-                        ✕
-                      </button>
+                      {isAdmin && (
+                        <>
+                          <button className="btn-sm btn-ghost" onClick={() => handleEdit(course)}>✎</button>
+                          <button
+                            className="btn-sm btn-ghost"
+                            style={{ color: "var(--danger)", borderColor: "transparent" }}
+                            onClick={() => handleDelete(course.id, course.code)}
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 

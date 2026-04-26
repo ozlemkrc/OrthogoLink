@@ -136,7 +136,7 @@ function Dashboard() {
           <h2>🚀 Getting Started</h2>
           <ol className="start-steps">
             {[
-              <>Go to <strong>Import from Universities</strong> to bulk-import courses from GTU, ITU, METU, Hacettepe, or IYTE</>,
+              <>Go to <strong>Import from Universities</strong> to bulk-import courses from GTU, METU, Hacettepe, or IYTE</>,
               <>Or use <strong>Add Course</strong> to manually paste a syllabus</>,
               <>Run <strong>Compare Syllabus</strong> to detect overlap with stored courses</>,
               <>Use <strong>Cross-University</strong> to benchmark across multiple institutions</>,

@@ -121,6 +121,7 @@ class TopCourseDetail(BaseModel):
 
 
 class TopCourseMatch(BaseModel):
+    course_id: Optional[int] = None
     course_code: str
     course_name: str
     matched_university: Optional[str] = None

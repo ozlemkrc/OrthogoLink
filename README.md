@@ -15,7 +15,6 @@ AI-powered web application that compares a new course syllabus against stored un
 | University | Code | Status |
 |-----------|------|--------|
 | Gebze Teknik Universitesi (GTU) | gtu | Available |
-| Istanbul Teknik Universitesi (ITU) | itu | Available |
 | Orta Dogu Teknik Universitesi (METU) | metu | Available |
 | Hacettepe Universitesi | hacettepe | Available |
 | Izmir Yuksek Teknoloji Enstitusu (IYTE) | iyte | Available |

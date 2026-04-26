@@ -18,7 +18,6 @@ function CrossUniCompare() {
   // Map university codes to course code prefixes
   const uniPrefixMap = {
     gtu: ["BLM", "ELK", "MAK", "END", "KIM", "MAT", "FIZ"],
-    itu: ["BLG", "YZV", "EHB", "KON"],
     metu: ["CENG", "EEE", "IE", "MATH", "STAT"],
     hacettepe: ["BBM", "EEM", "IST"],
     iyte: ["CENG", "EEE", "ME"],

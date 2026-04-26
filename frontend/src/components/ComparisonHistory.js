@@ -6,6 +6,8 @@ function ComparisonHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [authRequired, setAuthRequired] = useState(false);
+  const [search, setSearch] = useState("");
+  const [onlyOverlaps, setOnlyOverlaps] = useState(false);
 
   useEffect(() => {
     fetchComparisonHistory(30)
@@ -15,6 +17,12 @@ function ComparisonHistory() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const visible = history.filter((item) => {
+    if (onlyOverlaps && item.overall_similarity < 0.7) return false;
+    if (search && !(item.input_preview || "").toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   if (loading) {
     return (
@@ -55,10 +63,29 @@ function ComparisonHistory() {
 
   return (
     <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ marginBottom: 0 }}>Comparison History</h2>
+      <div className="card-row">
+        <h2>Comparison History</h2>
         <span className="badge badge-neutral">{history.length} run{history.length !== 1 ? "s" : ""}</span>
       </div>
+
+      <div className="table-toolbar">
+        <input
+          className="search-input"
+          type="search"
+          placeholder="Search input preview…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <label className={`toggle-pill ${onlyOverlaps ? "active" : ""}`}>
+          <input
+            type="checkbox"
+            checked={onlyOverlaps}
+            onChange={(e) => setOnlyOverlaps(e.target.checked)}
+          />
+          High-similarity only
+        </label>
+      </div>
+
       <div className="table-wrap">
         <table>
           <thead>
@@ -70,14 +97,15 @@ function ComparisonHistory() {
             </tr>
           </thead>
           <tbody>
-            {history.map((item) => (
+            {visible.length === 0 && (
+              <tr className="empty-row">
+                <td colSpan={4}>No matching runs.</td>
+              </tr>
+            )}
+            {visible.map((item) => (
               <tr key={item.id} className={item.overall_similarity >= 0.7 ? "row-overlap" : ""}>
-                <td style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                  {item.id}
-                </td>
-                <td style={{ maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {item.input_preview}
-                </td>
+                <td className="cell-id">{item.id}</td>
+                <td className="cell-preview">{item.input_preview}</td>
                 <td>
                   <div className="sim-bar-wrap">
                     <span className={getSimilarityLevel(item.overall_similarity)}>
@@ -91,7 +119,7 @@ function ComparisonHistory() {
                     </div>
                   </div>
                 </td>
-                <td style={{ fontSize: "0.78rem", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                <td className="cell-meta">
                   {item.created_at
                     ? new Date(item.created_at).toLocaleString(undefined, {
                         month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"

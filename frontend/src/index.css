@@ -790,8 +790,16 @@ select.input {
 /* -- Tables -- */
 .table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 70vh;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+}
+
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 table {
@@ -838,6 +846,41 @@ tbody tr.row-overlap {
 
 tbody tr.row-overlap:hover {
   background: rgba(220, 38, 38, 0.08);
+}
+
+/* Selected / linked rows (course → section matches) */
+tbody tr.row-selectable { cursor: pointer; }
+
+tbody tr.row-selected {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 0 var(--primary);
+}
+
+tbody tr.row-related {
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface)) !important;
+  box-shadow: inset 3px 0 0 0 var(--primary);
+}
+
+.select-marker {
+  display: inline-block;
+  width: 14px;
+  color: var(--primary);
+  font-weight: 700;
+  text-align: left;
+}
+
+.link-count-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
 }
 
 /* -- Badge -- */
@@ -1686,6 +1729,175 @@ tbody tr.row-overlap:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* -- Card header rows (title + action / badge) -- */
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-row h2 {
+  margin-bottom: 0;
+}
+
+.results-meta {
+  color: var(--text-secondary);
+  font-size: 0.83rem;
+}
+
+.results-meta .danger  { color: var(--danger);  font-weight: 600; }
+.results-meta .success { color: var(--success); font-weight: 600; }
+.results-meta .sep::before {
+  content: "·";
+  margin: 0 8px;
+  color: var(--gray-500);
+}
+
+/* -- UploadForm: filter & AI panels -- */
+.upload-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.filter-section {
+  margin-top: 14px;
+}
+
+.filter-toggle-btn {
+  gap: 6px;
+}
+
+.filter-count-badge {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+
+.filter-panel,
+.ai-panel {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.ai-panel {
+  margin-top: 14px;
+  padding: 12px 16px;
+  align-items: center;
+  gap: 16px;
+}
+
+.filter-field {
+  flex: 1;
+  min-width: 200px;
+}
+
+.ai-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+
+.ai-checkbox-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.ai-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-lang-row .add-course-label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.input-sm {
+  padding: 3px 8px;
+  font-size: 0.85rem;
+  min-width: 80px;
+}
+
+/* -- Tables: shared cells -- */
+.cell-id {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-preview {
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-meta {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.course-code-pill {
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+}
+
+.source-cell .source-name {
+  font-weight: 500;
+}
+
+.source-cell .source-faculty {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.why-cell {
+  min-width: 240px;
+}
+
+.why-cell .why-text {
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+}
+
+.matched-course-name {
+  color: var(--text-secondary);
+  font-size: 0.83rem;
+}
+
+.section-cell {
+  font-weight: 600;
+  font-size: 0.83rem;
+}
+
+.section-name-cell {
+  font-size: 0.83rem;
+}
+
 /* -- Filter chips -- */
 .filter-chips {
   display: flex;
@@ -1720,6 +1932,397 @@ tbody tr.row-overlap:hover {
 
 .filter-chip button:hover {
   opacity: 1;
+}
+
+/* -- Verdict banner (results header) -- */
+.verdict {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.verdict::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 5px;
+}
+
+.verdict-icon {
+  font-size: 1.8rem;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.verdict-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.verdict-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: var(--text-primary);
+}
+
+.verdict-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.verdict-actions {
+  flex-shrink: 0;
+}
+
+.verdict.unique {
+  background: color-mix(in srgb, var(--success) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 25%, var(--border));
+}
+.verdict.unique::before { background: var(--success); }
+.verdict.unique .verdict-icon {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.verdict.moderate {
+  background: color-mix(in srgb, var(--warning) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 25%, var(--border));
+}
+.verdict.moderate::before { background: var(--warning); }
+.verdict.moderate .verdict-icon {
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  color: var(--warning);
+}
+
+.verdict.overlap {
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 25%, var(--border));
+}
+.verdict.overlap::before { background: var(--danger); }
+.verdict.overlap .verdict-icon {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+
+/* -- Table toolbar (filter / search above tables) -- */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+
+.toggle-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.toggle-pill.active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.toggle-pill input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.search-input {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  min-width: 220px;
+  transition: border-color var(--transition);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.empty-row td {
+  text-align: center;
+  padding: 32px 14px !important;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* -- Active filter chips (shown when filters applied in UploadForm) -- */
+.active-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.active-filters-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+/* -- Sample-syllabus chip above textarea -- */
+.sample-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.sample-hint button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.sample-hint button:hover {
+  text-decoration: underline;
+}
+
+/* -- AI panel as an upgraded "feature" affordance -- */
+.ai-panel {
+  border-color: color-mix(in srgb, var(--primary) 25%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface-alt));
+}
+
+.ai-panel-icon {
+  font-size: 1rem;
+}
+
+/* -- Course expand chevron -- */
+.expand-cell {
+  text-align: center;
+  width: 56px;
+}
+
+.expand-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  transition: transform var(--transition), background var(--transition), color var(--transition);
+  background: var(--surface-alt);
+}
+
+.row-selectable:hover .expand-chevron {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.expand-chevron.open {
+  transform: rotate(90deg);
+  background: var(--primary);
+  color: #fff;
+}
+
+/* -- Course expanded panel -- */
+.course-expanded {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.course-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.info-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-cell-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.info-cell-value {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.info-cell-value.low      { color: var(--success); }
+.info-cell-value.moderate { color: var(--warning); }
+.info-cell-value.high     { color: var(--danger); }
+
+.course-info-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.course-description-text {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* -- Inner section-similarity table -- */
+.inner-table-wrap {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.inner-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.inner-table thead th {
+  background: var(--surface-alt);
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  position: static;
+}
+
+.inner-table tbody td {
+  padding: 8px 12px;
+}
+
+/* -- Full syllabus collapsible -- */
+.syllabus-details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+}
+
+.syllabus-details > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--primary);
+  list-style: none;
+  user-select: none;
+}
+
+.syllabus-details > summary::before {
+  content: '▶ ';
+  font-size: 0.7rem;
+  display: inline-block;
+  transition: transform var(--transition);
+  margin-right: 4px;
+}
+
+.syllabus-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.syllabus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px 16px;
+  max-height: 460px;
+  overflow-y: auto;
+}
+
+.syllabus-section {
+  border-left: 3px solid var(--primary);
+  padding: 6px 10px;
+  background: var(--surface-alt);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.syllabus-section-heading {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.syllabus-section-body {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* Compact stacked cell (used to merge course-code + university in section table) */
+.stacked-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 160px;
+}
+
+.stacked-cell .stacked-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stacked-cell .stacked-secondary {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
 }
 
 /* -- Responsive -- */

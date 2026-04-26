@@ -4,8 +4,7 @@ University course catalog scraper service.
 GTÜ and Hacettepe both publish their Bologna catalogs via the same ASP.NET
 WebForms OIBS stack, so they share an OIBSBolognaScraper base class. İYTE
 has its own WordPress-based CENG catalog and uses a dedicated scraper.
-İTÜ and ODTÜ currently serve curated seed data and are queued for live
-ingestion.
+ODTÜ currently serves curated seed data and is queued for live ingestion.
 """
 import logging
 import re
@@ -540,32 +539,6 @@ class HacettepeScraper(OIBSBolognaScraper):
             if code_upper.startswith(prefix):
                 return False
         return True
-
-
-# ═══════════════════════════════════════════════════════════
-# İTÜ - seeded (live scraper deferred)
-# ═══════════════════════════════════════════════════════════
-class ITUScraper(UniversityScraper):
-    parser_name = "itu-seed"
-    parser_version = "1.0.0"
-    BASE_URL = "https://www.sis.itu.edu.tr"
-
-    def __init__(self):
-        super().__init__("itu", "İstanbul Teknik Üniversitesi")
-
-    async def get_departments(self) -> List[Dict[str, str]]:
-        return [
-            {"code": "BLG", "name": "Bilgisayar Mühendisliği"},
-            {"code": "YZV", "name": "Yapay Zeka ve Veri Mühendisliği"},
-            {"code": "EHB", "name": "Elektronik ve Haberleşme Mühendisliği"},
-            {"code": "KON", "name": "Kontrol ve Otomasyon Mühendisliği"},
-            {"code": "MAT", "name": "Matematik Mühendisliği"},
-        ]
-
-    async def scrape_department_courses(
-        self, dept_code: str, limit: Optional[int] = None
-    ) -> List[Dict]:
-        return _ITU_SEED.get(dept_code, [])
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1202,70 +1175,16 @@ class IYTEScraper(UniversityScraper):
 # ═══════════════════════════════════════════════════════════
 # Seed catalogs (inlined; not persisted to DB by default)
 # ═══════════════════════════════════════════════════════════
-_ITU_SEED: Dict[str, List[Dict]] = {
-    "BLG": [
-        {
-            "code": "BLG101E",
-            "name": "Introduction to Information Systems",
-            "department": "Bilgisayar Mühendisliği",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Fundamentals of information systems and computer science. Students learn "
-                "basic concepts of computing, programming, and digital systems.\n\n"
-                "Learning Outcomes\n"
-                "1. Understand fundamental concepts of information systems\n"
-                "2. Write basic programs using Python\n"
-                "3. Understand binary number systems and logic gates\n\n"
-                "Course Content\n"
-                "Introduction to computing, number systems, Boolean algebra, Python basics, "
-                "control flow, functions, lists and strings, file operations, algorithms."
-            ),
-        },
-        {
-            "code": "BLG202E",
-            "name": "Data Structures",
-            "department": "Bilgisayar Mühendisliği",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Fundamental data structures and algorithm analysis.\n\n"
-                "Course Content\n"
-                "Arrays, linked lists, stacks, queues, recursion, trees, BST, AVL, heaps, "
-                "priority queues, hash tables, graphs, sorting algorithms, complexity analysis."
-            ),
-        },
-    ],
-    "YZV": [
-        {
-            "code": "YZV301E",
-            "name": "Deep Learning",
-            "department": "Yapay Zeka ve Veri Mühendisliği",
-            "credits": 4,
-            "description": (
-                "Course Description\n"
-                "Theory and practice of deep learning.\n\n"
-                "Course Content\n"
-                "Feedforward networks, backprop, optimization, regularization, CNNs, RNNs, "
-                "attention and transformers, GANs, VAEs, transfer learning."
-            ),
-        },
-    ],
-}
-
-
 # ═══════════════════════════════════════════════════════════
 # Registry
 # ═══════════════════════════════════════════════════════════
 gtu_scraper = GTUScraper()
-itu_scraper = ITUScraper()
 metu_scraper = METUScraper()
 hacettepe_scraper = HacettepeScraper()
 iyte_scraper = IYTEScraper()
 
 UNIVERSITY_SCRAPERS = {
     "gtu": gtu_scraper,
-    "itu": itu_scraper,
     "metu": metu_scraper,
     "hacettepe": hacettepe_scraper,
     "iyte": iyte_scraper,

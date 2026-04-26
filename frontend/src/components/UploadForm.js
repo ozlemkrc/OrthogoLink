@@ -113,16 +113,21 @@ function UploadForm({ onResult }) {
       {/* Text input */}
       {mode === "text" && (
         <>
+          {!text && (
+            <div className="sample-hint">
+              <span>💡 New here?</span>
+              <button type="button" onClick={() => setText(SAMPLE_TEXT)}>
+                Try a sample syllabus →
+              </button>
+            </div>
+          )}
           <textarea
             placeholder="Paste the full ECTS course form or syllabus text here (course description, learning outcomes, weekly topics, etc.)..."
             value={text}
             onChange={(e) => setText(e.target.value)}
             style={{ minHeight: 220 }}
           />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-            <button className="btn-sm btn-ghost" type="button" onClick={() => setText(SAMPLE_TEXT)}>
-              Use Sample Syllabus
-            </button>
+          <div className="upload-toggle-row">
             <span className={`char-counter ${charCount === 0 ? "" : charOk ? "ok" : "warn"}`}>
               {charCount} chars{charCount > 0 && !charOk ? ` — need ${50 - charCount} more` : ""}
             </span>
@@ -148,41 +153,41 @@ function UploadForm({ onResult }) {
       )}
 
       {/* Filter section */}
-      <div style={{ marginTop: 14 }}>
+      <div className="filter-section">
         <button
           type="button"
-          className="btn-sm btn-ghost"
+          className="btn-sm btn-ghost filter-toggle-btn"
           onClick={() => setShowFilters((v) => !v)}
-          style={{ gap: 6 }}
         >
           {showFilters ? "▲" : "▼"} Filter by University / Department
           {hasFilters && (
-            <span style={{
-              background: "var(--primary)",
-              color: "#fff",
-              borderRadius: 999,
-              fontSize: "0.7rem",
-              padding: "1px 6px",
-              marginLeft: 4,
-            }}>
+            <span className="filter-count-badge">
               {[uniFilter, deptFilter].filter(Boolean).length}
             </span>
           )}
         </button>
 
+        {hasFilters && !showFilters && (
+          <div className="active-filters">
+            <span className="active-filters-label">Active:</span>
+            {uniFilter && (
+              <span className="filter-chip">
+                {uniFilter}
+                <button type="button" onClick={() => setUniFilter("")} aria-label="Remove university filter">×</button>
+              </span>
+            )}
+            {deptFilter && (
+              <span className="filter-chip">
+                {deptFilter}
+                <button type="button" onClick={() => setDeptFilter("")} aria-label="Remove department filter">×</button>
+              </span>
+            )}
+          </div>
+        )}
+
         {showFilters && (
-          <div style={{
-            marginTop: 10,
-            padding: "14px 16px",
-            background: "var(--surface-alt)",
-            borderRadius: "var(--radius)",
-            border: "1px solid var(--border)",
-            display: "flex",
-            gap: 12,
-            flexWrap: "wrap",
-            alignItems: "flex-end",
-          }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="filter-panel">
+            <div className="filter-field">
               <label className="add-course-label">University</label>
               <select
                 className="input"
@@ -194,7 +199,7 @@ function UploadForm({ onResult }) {
               </select>
             </div>
 
-            <div style={{ flex: 1, minWidth: 200 }}>
+            <div className="filter-field">
               <label className="add-course-label">Department</label>
               <select
                 className="input"
@@ -207,44 +212,32 @@ function UploadForm({ onResult }) {
             </div>
 
             {hasFilters && (
-              <button type="button" className="btn-sm btn-ghost" onClick={clearFilters} style={{ marginBottom: 1 }}>
+              <button type="button" className="btn-sm btn-ghost" onClick={clearFilters}>
                 ✕ Clear
               </button>
             )}
-
           </div>
         )}
       </div>
 
       {/* AI explanation controls */}
-      <div style={{
-        marginTop: 14,
-        padding: "12px 16px",
-        background: "var(--surface-alt)",
-        borderRadius: "var(--radius)",
-        border: "1px solid var(--border)",
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        flexWrap: "wrap",
-      }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontWeight: 500, fontSize: "0.88rem" }}>
+      <div className="ai-panel">
+        <label className="ai-checkbox-label">
           <input
             type="checkbox"
             checked={aiEnabled}
             onChange={(e) => setAiEnabled(e.target.checked)}
-            style={{ width: 15, height: 15, cursor: "pointer" }}
           />
+          <span className="ai-panel-icon">✨</span>
           Generate AI explanation for details
         </label>
         {aiEnabled && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label className="add-course-label" style={{ margin: 0, whiteSpace: "nowrap" }}>Language:</label>
+          <div className="ai-lang-row">
+            <label className="add-course-label">Language:</label>
             <select
-              className="input"
+              className="input input-sm"
               value={aiLanguage}
               onChange={(e) => setAiLanguage(e.target.value)}
-              style={{ padding: "3px 8px", fontSize: "0.85rem", minWidth: 80 }}
             >
               <option value="tr">TR — Türkçe</option>
               <option value="en">EN — English</option>
