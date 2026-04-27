@@ -281,18 +281,12 @@ function CourseExpandedDetails({ course, sectionMatches }) {
 
   return (
     <div className="course-expanded">
-      <div className="course-info-grid">
-        <InfoCell label="Code" value={course.course_code} />
-        <InfoCell label="University" value={course.matched_university || fullCourse?.university} />
-        <InfoCell label="Faculty" value={course.matched_faculty || fullCourse?.faculty} />
-        <InfoCell label="Department" value={fullCourse?.department} />
-        <InfoCell label="Credits" value={fullCourse?.credits} />
-        <InfoCell
-          label="Course Similarity"
-          value={`${(course.average_similarity * 100).toFixed(1)}%`}
-          tone={getSimilarityLevel(course.average_similarity)}
-        />
-      </div>
+      {(fullCourse?.department || fullCourse?.credits) && (
+        <div className="course-info-grid">
+          <InfoCell label="Department" value={fullCourse?.department} />
+          <InfoCell label="Credits" value={fullCourse?.credits} />
+        </div>
+      )}
 
       {loading && (
         <div className="loading-state" style={{ padding: "16px 0" }}>
@@ -303,10 +297,14 @@ function CourseExpandedDetails({ course, sectionMatches }) {
       {error && <div className="error-msg" role="alert"><span>⚠</span> {error}</div>}
 
       {fullCourse?.description && (
-        <div className="course-info-block">
-          <div className="snippet-title">Course Description</div>
-          <div className="course-description-text">{fullCourse.description}</div>
-        </div>
+        <details className="syllabus-details">
+          <summary>Course Description</summary>
+          <div className="syllabus-list">
+            <div className="syllabus-section">
+              <div className="syllabus-section-body">{fullCourse.description}</div>
+            </div>
+          </div>
+        </details>
       )}
 
       {sectionMatches.length > 0 && (
@@ -353,21 +351,7 @@ function CourseExpandedDetails({ course, sectionMatches }) {
         </div>
       )}
 
-      {fullCourse?.sections?.length > 0 && (
-        <details className="syllabus-details">
-          <summary>Full syllabus — {fullCourse.sections.length} section{fullCourse.sections.length !== 1 ? "s" : ""}</summary>
-          <div className="syllabus-list">
-            {fullCourse.sections.map((sec) => (
-              <div key={sec.id} className="syllabus-section">
-                <div className="syllabus-section-heading">{sec.heading}</div>
-                <div className="syllabus-section-body">{sec.content || <em>(empty)</em>}</div>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-
-      {detail && (
+{detail && (
         <div className="detail-meta">
           <span>Best section: <strong>{(detail.best_similarity * 100).toFixed(1)}%</strong></span>
           <span>Contributing matches: <strong>{detail.match_count}</strong></span>

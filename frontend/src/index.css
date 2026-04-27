@@ -1357,7 +1357,8 @@ tbody tr.row-related {
 }
 
 .dept-bar-label {
-  min-width: 200px;
+  width: 200px;
+  flex: 0 0 200px;
   font-size: 0.83rem;
   color: var(--text-secondary);
   text-align: right;
