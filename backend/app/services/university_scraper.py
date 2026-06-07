@@ -3,8 +3,8 @@ University course catalog scraper service.
 
 GTÜ and Hacettepe both publish their Bologna catalogs via the same ASP.NET
 WebForms OIBS stack, so they share an OIBSBolognaScraper base class. İYTE
-has its own WordPress-based CENG catalog and uses a dedicated scraper.
-ODTÜ currently serves curated seed data and is queued for live ingestion.
+has its own WordPress-based CENG catalog, METU a PHP catalog, YTÜ a PHP/Yii
+Bologna system, and Marmara its MEOBS platform — each uses a dedicated scraper.
 """
 import logging
 import re
@@ -1173,6 +1173,608 @@ class IYTEScraper(UniversityScraper):
 
 
 # ═══════════════════════════════════════════════════════════
+# YTÜ - live scraper for the Yii-based Bologna Information System
+# ═══════════════════════════════════════════════════════════
+# Yıldız Teknik does NOT run the OIBS/Proliz ASP.NET stack; it has its own
+# PHP/Yii catalog at bologna.yildiz.edu.tr with plain GET URLs (no __VIEWSTATE
+# or __doPostBack), so it gets a dedicated scraper rather than subclassing
+# OIBSBolognaScraper.
+#
+# Listing: /index.php?r=course/courselist&aid=<academic-unit-id>
+#   - <table> rows: <a href=".../course/view&id=..">CODE</a> | name | Ders |
+#     Uygulama | Laboratuar | Yerel Kredi | AKTS (last <td>)
+# Detail: /index.php?r=course/view&id=<id>&aid=<aid>&pid=<program-id>
+#   - <tr id="courseshortinfo">: name (<strong>), code, local credit, AKTS, ...
+#   - <table class="detail-view"> th/td rows: Dersin Amacı, Dersin İçeriği,
+#     Önkoşullar, Yarıyıl, Dersin Dili, koordinatör, veren(ler), kaynaklar
+#   - <div id="learningoutcomes"><ol><li>...  learning outcomes
+#   - <table id="weekly_subjects">: weekly topics (<td id="subject-N-tr">)
+class YTUScraper(UniversityScraper):
+    parser_name = "ytu-bologna"
+    parser_version = "1.0.0"
+
+    BASE_URL = "http://www.bologna.yildiz.edu.tr"
+    CONCURRENCY = 5
+
+    # aid = academic unit id. Bilgisayar Mühendisliği Bölümü = 3. The course
+    # list at this aid spans all three program variants (Turkish / %30 / %100
+    # English); we dedupe by course code so each course is fetched once.
+    PROGRAMS: Dict[str, Dict] = {
+        "BLM": {
+            "aid": 3,
+            "name": "Bilgisayar Mühendisliği",
+            "department": "Bilgisayar Mühendisliği",
+            "faculty": "Elektrik-Elektronik Fakültesi",
+        },
+    }
+
+    def __init__(self):
+        super().__init__("ytu", "Yıldız Teknik Üniversitesi")
+        self.timeout = ClientTimeout(total=60)
+
+    async def get_departments(self) -> List[Dict[str, str]]:
+        return [{"code": code, "name": prog["name"]} for code, prog in self.PROGRAMS.items()]
+
+    async def scrape_department_courses(
+        self, dept_code: str, limit: Optional[int] = None
+    ) -> List[Dict]:
+        prog = self.PROGRAMS.get((dept_code or "").upper())
+        if not prog:
+            logger.warning(f"YTU: unknown department '{dept_code}'")
+            return []
+
+        list_url = f"{self.BASE_URL}/index.php?r=course/courselist&aid={prog['aid']}"
+        html = await fetch_with_retry(list_url, headers=self.headers, timeout=self.timeout)
+        if not html:
+            logger.error(f"YTU: failed to fetch course list for {dept_code}")
+            return []
+
+        entries = self._parse_list(html)
+        logger.info(f"YTU {dept_code}: {len(entries)} unique courses in catalog")
+        if limit:
+            entries = entries[:limit]
+
+        semaphore = asyncio.Semaphore(self.CONCURRENCY)
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(
+            timeout=self.timeout, headers=self.headers, connector=connector
+        ) as session:
+            tasks = [self._scrape_course(session, semaphore, entry, prog) for entry in entries]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        courses: List[Dict] = []
+        failed = 0
+        for r in results:
+            if isinstance(r, dict):
+                courses.append(r)
+            else:
+                failed += 1
+                if isinstance(r, Exception):
+                    logger.debug(f"YTU: task raised {r}")
+
+        logger.info(f"YTU {dept_code}: scraped {len(courses)} courses, {failed} failed/skipped")
+        return courses
+
+    # ---- list page parsing ----
+    def _parse_list(self, html: str) -> List[Dict]:
+        soup = BeautifulSoup(html, "html.parser")
+        entries: List[Dict] = []
+        seen: set = set()
+
+        for a in soup.find_all("a", href=re.compile(r"course/view")):
+            href = a.get("href", "")
+            code = re.sub(r"\s+", "", self.clean_text(a.get_text())).upper()
+            if not code or not href:
+                continue
+            if code in seen:
+                continue  # same course listed under multiple program variants
+            seen.add(code)
+
+            tr = a.find_parent("tr")
+            name = ""
+            ects = None
+            if tr:
+                tds = tr.find_all("td")
+                if len(tds) > 1:
+                    name = self.clean_text(tds[1].get_text())
+                if tds:
+                    try:
+                        ects = float(self.clean_text(tds[-1].get_text()))
+                    except ValueError:
+                        pass
+
+            url = href if href.startswith("http") else f"{self.BASE_URL}{href}"
+            entries.append({"code": code, "name": name, "ects": ects, "url": url})
+
+        return entries
+
+    # ---- detail page parsing ----
+    async def _scrape_course(
+        self,
+        session: aiohttp.ClientSession,
+        semaphore: asyncio.Semaphore,
+        entry: Dict,
+        prog: Dict,
+    ) -> Optional[Dict]:
+        async with semaphore:
+            html = await self._get_with_retry(session, entry["url"])
+            await asyncio.sleep(0.15)
+        if not html:
+            return None
+        try:
+            return self._parse_detail(entry, prog, html)
+        except Exception as exc:
+            logger.warning(f"YTU: parse error for {entry['code']}: {exc}")
+            return None
+
+    async def _get_with_retry(
+        self, session: aiohttp.ClientSession, url: str, max_attempts: int = 3
+    ) -> Optional[str]:
+        last_err: Optional[str] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        return await resp.text()
+                    if resp.status in (429, 500, 502, 503, 504):
+                        last_err = f"HTTP {resp.status}"
+                    else:
+                        logger.warning(f"YTU: GET {url} -> HTTP {resp.status}")
+                        return None
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                last_err = str(exc)
+            backoff = 0.6 * (2 ** (attempt - 1))
+            await asyncio.sleep(backoff)
+        logger.warning(f"YTU: giving up on {url}: {last_err}")
+        return None
+
+    def _parse_detail(self, entry: Dict, prog: Dict, html: str) -> Optional[Dict]:
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Header row: name (<strong>), code, local credit, AKTS, hours...
+        name = entry.get("name") or ""
+        code = entry["code"]
+        ects = entry.get("ects")
+        short = soup.find(id="courseshortinfo")
+        if short:
+            cells = short.find_all("td")
+            if cells:
+                head_name = self.clean_text(cells[0].get_text())
+                if head_name:
+                    name = head_name
+                if len(cells) > 1 and self.clean_text(cells[1].get_text()):
+                    code = re.sub(r"\s+", "", self.clean_text(cells[1].get_text())).upper()
+                if len(cells) > 3:
+                    try:
+                        ects = float(self.clean_text(cells[3].get_text()))
+                    except ValueError:
+                        pass
+
+        # th/td metadata across the detail-view tables.
+        meta = self._extract_meta(soup)
+        amac = meta.get("dersin amacı", "")
+        icerik = meta.get("dersin içeriği", "")
+        prereq = meta.get("önkoşullar", "")
+        if prereq.lower() in ("yok", "none", "-"):
+            prereq = ""
+        semester = meta.get("yarıyıl", "")
+        language = meta.get("dersin dili", "")
+        kaynaklar = meta.get("ders kitabı / malzemesi / önerilen kaynaklar", "")
+        koordinator = meta.get("dersin koordinatörü", "")
+        veren = meta.get("dersi veren(ler)", "")
+
+        outcomes = self._extract_outcomes(soup)
+        topics = self._extract_weekly(soup)
+
+        if not any([amac, icerik, outcomes, topics]):
+            logger.debug(f"YTU: skipping {code} — no detail content")
+            return None
+
+        description = self._compose_description(
+            code=code, name=name, prog=prog, ects=ects, semester=semester,
+            language=language, prereq=prereq, amac=amac, icerik=icerik,
+            outcomes=outcomes, topics=topics, kaynaklar=kaynaklar,
+            koordinator=koordinator, veren=veren,
+        )
+
+        return {
+            "code": code,
+            "name": name or code,
+            "department": prog["department"],
+            "faculty": prog["faculty"],
+            "credits": ects,
+            "description": description,
+            "source_url": entry["url"],
+        }
+
+    def _extract_meta(self, soup: BeautifulSoup) -> Dict[str, str]:
+        meta: Dict[str, str] = {}
+        for table in soup.find_all("table", class_="detail-view"):
+            for tr in table.find_all("tr"):
+                th = tr.find("th")
+                td = tr.find("td")
+                if not th or not td:
+                    continue
+                key = self.clean_text(th.get_text()).rstrip(":").lower()
+                value = self.clean_text(td.get_text(" ", strip=True))
+                if key and value and key not in meta:
+                    meta[key] = value
+        return meta
+
+    def _extract_outcomes(self, soup: BeautifulSoup) -> List[str]:
+        container = soup.find(id="learningoutcomes")
+        if not container:
+            return []
+        outcomes: List[str] = []
+        ol = container.find("ol")
+        for li in (ol.find_all("li") if ol else []):
+            text = self.clean_text(li.get_text(" ", strip=True))
+            if text:
+                outcomes.append(text)
+        return outcomes
+
+    def _extract_weekly(self, soup: BeautifulSoup) -> List[str]:
+        table = soup.find(id="weekly_subjects")
+        if not table:
+            return []
+        topics: List[str] = []
+        for td in table.find_all("td", id=re.compile(r"subject-\d+-tr")):
+            text = self.clean_text(td.get_text(" ", strip=True))
+            if text:
+                topics.append(text)
+        return topics
+
+    def _compose_description(
+        self,
+        *,
+        code: str,
+        name: str,
+        prog: Dict,
+        ects,
+        semester: str,
+        language: str,
+        prereq: str,
+        amac: str,
+        icerik: str,
+        outcomes: List[str],
+        topics: List[str],
+        kaynaklar: str,
+        koordinator: str,
+        veren: str,
+    ) -> str:
+        parts: List[str] = ["Ders Tanımı"]
+        header_bits = [code, name, prog.get("department", "")]
+        if ects:
+            header_bits.append(f"AKTS: {ects}")
+        if semester:
+            header_bits.append(f"Yarıyıl: {semester}")
+        if language:
+            header_bits.append(f"Dil: {language}")
+        parts.append(" | ".join(b for b in header_bits if b))
+
+        if amac:
+            parts += ["\nAmaç", amac]
+        if icerik:
+            parts += ["\nDers İçeriği", icerik]
+        if prereq:
+            parts += ["\nÖnkoşullar", prereq]
+        if outcomes:
+            parts.append("\nÖğrenme Çıktıları")
+            parts.extend(f"{i}. {o}" for i, o in enumerate(outcomes, 1))
+        if topics:
+            parts.append("\nHaftalık Plan")
+            parts.extend(f"Hafta {i}: {t}" for i, t in enumerate(topics, 1))
+        if kaynaklar:
+            parts += ["\nKaynaklar", kaynaklar]
+        instructors = [v for v in (veren, koordinator) if v]
+        if instructors:
+            parts += ["\nÖğretim Üyesi", " / ".join(dict.fromkeys(instructors))]
+
+        return "\n".join(parts).strip()
+
+
+# ═══════════════════════════════════════════════════════════
+# Marmara - live scraper for the MEOBS education/teaching system
+# ═══════════════════════════════════════════════════════════
+# Marmara runs its own MEOBS platform at meobs.marmara.edu.tr (neither OIBS nor
+# YTÜ's Yii stack). The program page loads its curriculum via an AJAX call to
+# /Mufredat/DersListesi; that endpoint returns a static table of course links,
+# and each /Ders/<slug>/<code>-<id>-<mufredat> page is fully server-rendered.
+#
+# List: /Mufredat/DersListesi?organizasyonId=..&organizasyonProgramId=..&
+#       programMufredatId=..&mufredatTurId=..&birimOrganizasyonId=0
+#   - rows: <a href="/Ders/..">CODE</a> | name | <td class="c"> type, T, U,
+#     local credit, AKTS (last .c cell) | Print link (skipped)
+# Detail: /Ders/<slug>/<code>-<id>-<mufredat>
+#   - header <table>: program | code | name | type | Dönem | AKTS | T | U
+#   - <div class="FieldsetBaslik">label</div><p>value</p> pairs (Amaç, İçerik,
+#     Dersin Sunulduğu Dil, Önerilen Kaynaklar, ...)
+#   - <ul class="numberList"><li> learning outcomes
+#   - "Haftalık Ayrıntılı Ders İçeriği" -> <table class="fullTable"> weekly plan
+class MarmaraScraper(UniversityScraper):
+    parser_name = "marmara-meobs"
+    parser_version = "1.0.0"
+
+    BASE_URL = "https://meobs.marmara.edu.tr"
+    CONCURRENCY = 5
+
+    # Each program is identified by the query string MEOBS passes to the
+    # DersListesi AJAX endpoint (captured from the program page's
+    # loadMufredatDersListesi(...) bootstrap call, "Güncel" curriculum).
+    PROGRAMS: Dict[str, Dict] = {
+        "CSE": {
+            "params": (
+                "organizasyonId=97&organizasyonProgramId=78"
+                "&programMufredatId=4199&mufredatTurId=932001&birimOrganizasyonId=0"
+            ),
+            "name": "Computer Engineering (English)",
+            "department": "Computer Engineering",
+            "faculty": "Faculty of Engineering",
+        },
+    }
+
+    def __init__(self):
+        super().__init__("marmara", "Marmara Üniversitesi")
+        self.timeout = ClientTimeout(total=60)
+
+    async def get_departments(self) -> List[Dict[str, str]]:
+        return [{"code": code, "name": prog["name"]} for code, prog in self.PROGRAMS.items()]
+
+    async def scrape_department_courses(
+        self, dept_code: str, limit: Optional[int] = None
+    ) -> List[Dict]:
+        prog = self.PROGRAMS.get((dept_code or "").upper())
+        if not prog:
+            logger.warning(f"Marmara: unknown department '{dept_code}'")
+            return []
+
+        list_url = f"{self.BASE_URL}/Mufredat/DersListesi?{prog['params']}"
+        html = await fetch_with_retry(list_url, headers=self.headers, timeout=self.timeout)
+        if not html:
+            logger.error(f"Marmara: failed to fetch course list for {dept_code}")
+            return []
+
+        entries = self._parse_list(html)
+        logger.info(f"Marmara {dept_code}: {len(entries)} unique courses in curriculum")
+        if limit:
+            entries = entries[:limit]
+
+        semaphore = asyncio.Semaphore(self.CONCURRENCY)
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(
+            timeout=self.timeout, headers=self.headers, connector=connector
+        ) as session:
+            tasks = [self._scrape_course(session, semaphore, entry, prog) for entry in entries]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        courses: List[Dict] = []
+        failed = 0
+        for r in results:
+            if isinstance(r, dict):
+                courses.append(r)
+            else:
+                failed += 1
+                if isinstance(r, Exception):
+                    logger.debug(f"Marmara: task raised {r}")
+
+        logger.info(f"Marmara {dept_code}: scraped {len(courses)} courses, {failed} failed/skipped")
+        return courses
+
+    # ---- list page parsing ----
+    def _parse_list(self, html: str) -> List[Dict]:
+        soup = BeautifulSoup(html, "html.parser")
+        entries: List[Dict] = []
+        seen: set = set()
+
+        for a in soup.find_all("a", href=re.compile(r"/Ders/")):
+            href = a.get("href", "")
+            if "/Ders/Print/" in href:
+                continue  # printable duplicate of the same course
+            code = re.sub(r"\s+", "", self.clean_text(a.get_text())).upper()
+            if not re.match(r"^[A-ZÇĞİÖŞÜ]{2,5}\d", code):
+                continue
+            if code in seen:
+                continue
+            seen.add(code)
+
+            tr = a.find_parent("tr")
+            name = ""
+            ects = None
+            if tr:
+                code_td = a.find_parent("td")
+                name_td = code_td.find_next_sibling("td") if code_td else None
+                if name_td:
+                    name = self.clean_text(name_td.get_text(" ", strip=True))
+                c_cells = tr.find_all("td", class_="c")
+                if c_cells:
+                    try:
+                        ects = float(self.clean_text(c_cells[-1].get_text()).replace(",", "."))
+                    except ValueError:
+                        pass
+
+            url = href if href.startswith("http") else f"{self.BASE_URL}{href}"
+            entries.append({"code": code, "name": name, "ects": ects, "url": url})
+
+        return entries
+
+    # ---- detail page parsing ----
+    async def _scrape_course(
+        self,
+        session: aiohttp.ClientSession,
+        semaphore: asyncio.Semaphore,
+        entry: Dict,
+        prog: Dict,
+    ) -> Optional[Dict]:
+        async with semaphore:
+            html = await self._get_with_retry(session, entry["url"])
+            await asyncio.sleep(0.15)
+        if not html:
+            return None
+        try:
+            return self._parse_detail(entry, prog, html)
+        except Exception as exc:
+            logger.warning(f"Marmara: parse error for {entry['code']}: {exc}")
+            return None
+
+    async def _get_with_retry(
+        self, session: aiohttp.ClientSession, url: str, max_attempts: int = 3
+    ) -> Optional[str]:
+        last_err: Optional[str] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        return await resp.text()
+                    if resp.status in (429, 500, 502, 503, 504):
+                        last_err = f"HTTP {resp.status}"
+                    else:
+                        logger.warning(f"Marmara: GET {url} -> HTTP {resp.status}")
+                        return None
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                last_err = str(exc)
+            backoff = 0.6 * (2 ** (attempt - 1))
+            await asyncio.sleep(backoff)
+        logger.warning(f"Marmara: giving up on {url}: {last_err}")
+        return None
+
+    def _parse_detail(self, entry: Dict, prog: Dict, html: str) -> Optional[Dict]:
+        soup = BeautifulSoup(html, "html.parser")
+
+        name = entry.get("name") or ""
+        code = entry["code"]
+        ects = entry.get("ects")
+        semester = self._extract_semester(soup)
+
+        # FieldsetBaslik label -> following <p> value pairs.
+        fields = self._extract_fields(soup)
+        amac = fields.get("dersin amacı", "")
+        icerik = fields.get("dersin içeriği", "")
+        language = fields.get("dersin sunulduğu dil", "")
+        kaynaklar = fields.get("ders kitabı / malzemesi / önerilen kaynaklar", "")
+
+        outcomes = self._extract_outcomes(soup)
+        topics = self._extract_weekly(soup)
+
+        if not any([amac, icerik, outcomes, topics]):
+            logger.debug(f"Marmara: skipping {code} — no detail content")
+            return None
+
+        description = self._compose_description(
+            code=code, name=name, prog=prog, ects=ects, semester=semester,
+            language=language, amac=amac, icerik=icerik, outcomes=outcomes,
+            topics=topics, kaynaklar=kaynaklar,
+        )
+
+        return {
+            "code": code,
+            "name": name or code,
+            "department": prog["department"],
+            "faculty": prog["faculty"],
+            "credits": ects,
+            "description": description,
+            "source_url": entry["url"],
+        }
+
+    def _extract_semester(self, soup: BeautifulSoup) -> str:
+        # Header summary row: program | code | name | type | Dönem | AKTS | T | U
+        for table in soup.find_all("table"):
+            text = table.get_text(" ", strip=True)
+            if "AKTS" not in text or "Ders Türü" not in text:
+                continue
+            rows = table.find_all("tr")
+            if len(rows) >= 2:
+                tds = rows[-1].find_all("td")
+                if len(tds) >= 8:
+                    return self.clean_text(tds[4].get_text())
+            break
+        return ""
+
+    def _extract_fields(self, soup: BeautifulSoup) -> Dict[str, str]:
+        fields: Dict[str, str] = {}
+        for fb in soup.find_all("div", class_="FieldsetBaslik"):
+            key = self.clean_text(fb.get_text()).rstrip(":").lower()
+            sib = fb.find_next_sibling()
+            if sib is not None and sib.name == "p":
+                value = self.clean_text(sib.get_text(" ", strip=True))
+                if key and value and value != "-" and key not in fields:
+                    fields[key] = value
+        return fields
+
+    def _extract_outcomes(self, soup: BeautifulSoup) -> List[str]:
+        for h2 in soup.find_all("h2"):
+            heading = self.clean_text(h2.get_text()).lower()
+            if "öğrenme çıktıları" in heading and "program" not in heading:
+                article = h2.find_next("article")
+                ul = article.find("ul", class_="numberList") if article else None
+                if ul:
+                    return [
+                        self.clean_text(li.get_text(" ", strip=True))
+                        for li in ul.find_all("li")
+                        if self.clean_text(li.get_text(" ", strip=True))
+                    ]
+        return []
+
+    def _extract_weekly(self, soup: BeautifulSoup) -> List[str]:
+        for h2 in soup.find_all("h2"):
+            if "haftalık" in self.clean_text(h2.get_text()).lower():
+                table = h2.find_next("table", class_="fullTable")
+                if not table:
+                    return []
+                topics: List[str] = []
+                body = table.find("tbody") or table
+                for tr in body.find_all("tr"):
+                    tds = tr.find_all("td")
+                    if len(tds) < 2:
+                        continue
+                    week = self.clean_text(tds[0].get_text())
+                    topic = self.clean_text(" ".join(td.get_text(" ", strip=True) for td in tds[1:]))
+                    if topic and re.match(r"^\d{1,2}$", week):
+                        topics.append(topic)
+                return topics
+        return []
+
+    def _compose_description(
+        self,
+        *,
+        code: str,
+        name: str,
+        prog: Dict,
+        ects,
+        semester: str,
+        language: str,
+        amac: str,
+        icerik: str,
+        outcomes: List[str],
+        topics: List[str],
+        kaynaklar: str,
+    ) -> str:
+        parts: List[str] = ["Ders Tanımı"]
+        header_bits = [code, name, prog.get("department", "")]
+        if ects:
+            header_bits.append(f"AKTS: {ects}")
+        if semester:
+            header_bits.append(f"Dönem: {semester}")
+        if language:
+            header_bits.append(f"Dil: {language}")
+        parts.append(" | ".join(b for b in header_bits if b))
+
+        if amac:
+            parts += ["\nAmaç", amac]
+        if icerik:
+            parts += ["\nDers İçeriği", icerik]
+        if outcomes:
+            parts.append("\nÖğrenme Çıktıları")
+            parts.extend(f"{i}. {o}" for i, o in enumerate(outcomes, 1))
+        if topics:
+            parts.append("\nHaftalık Plan")
+            parts.extend(f"Hafta {i}: {t}" for i, t in enumerate(topics, 1))
+        if kaynaklar:
+            parts += ["\nKaynaklar", kaynaklar]
+
+        return "\n".join(parts).strip()
+
+
+# ═══════════════════════════════════════════════════════════
 # Seed catalogs (inlined; not persisted to DB by default)
 # ═══════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════
@@ -1182,10 +1784,14 @@ gtu_scraper = GTUScraper()
 metu_scraper = METUScraper()
 hacettepe_scraper = HacettepeScraper()
 iyte_scraper = IYTEScraper()
+ytu_scraper = YTUScraper()
+marmara_scraper = MarmaraScraper()
 
 UNIVERSITY_SCRAPERS = {
     "gtu": gtu_scraper,
     "metu": metu_scraper,
     "hacettepe": hacettepe_scraper,
     "iyte": iyte_scraper,
+    "ytu": ytu_scraper,
+    "marmara": marmara_scraper,
 }

@@ -1,7 +1,7 @@
 """
 University course import API routes.
 Allows importing courses from Turkish university catalogs.
-Supports GTU, METU, Hacettepe, and IYTE.
+Supports GTU, METU, Hacettepe, IYTE, YTU, and Marmara.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
