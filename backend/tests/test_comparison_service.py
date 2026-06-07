@@ -259,6 +259,34 @@ def test_build_top_course_detail_empty_returns_none():
     assert cs._build_top_course_detail([], threshold=0.7) is None
 
 
+# ── _blend_score (cross-encoder re-ranking) ──────────────────────
+
+def test_blend_score_weight_zero_is_pure_cosine():
+    assert cs._blend_score(0.8, 0.2, weight=0.0) == pytest.approx(0.8)
+
+
+def test_blend_score_weight_one_is_pure_cross_encoder():
+    assert cs._blend_score(0.8, 0.2, weight=1.0) == pytest.approx(0.2)
+
+
+def test_blend_score_midpoint_averages():
+    assert cs._blend_score(0.8, 0.4, weight=0.5) == pytest.approx(0.6)
+
+
+@pytest.mark.parametrize("weight", [-1.0, 2.0])
+def test_blend_score_clamps_weight_into_unit_range(weight):
+    # Out-of-range weights are clamped to 0/1 rather than extrapolating.
+    out = cs._blend_score(0.8, 0.2, weight=weight)
+    assert 0.2 <= out <= 0.8
+
+
+def test_blend_score_stays_in_unit_interval():
+    for c in (0.0, 0.3, 1.0):
+        for e in (0.0, 0.5, 1.0):
+            out = cs._blend_score(c, e, weight=0.5)
+            assert 0.0 <= out <= 1.0
+
+
 # ── _generate_report ─────────────────────────────────────────────
 
 def test_generate_report_contains_key_sections():
@@ -307,3 +335,20 @@ def test_generate_report_handles_no_matches():
     )
     assert "No matches above the weak-match floor" in report
     assert "LOW OVERLAP" in report
+
+
+def test_generate_report_scoring_line_reflects_reranking():
+    base_kwargs = dict(
+        overall_sim=0.5,
+        overlap_pct=10.0,
+        overlap_class="low",
+        confidence="low",
+        threshold=0.7,
+        profile_name="balanced",
+        top_courses=[],
+        num_sections=3,
+        overlapping_section_count=0,
+        filter_info="",
+    )
+    assert "cosine" in cs._generate_report(**base_kwargs)
+    assert "cross-encoder" in cs._generate_report(**base_kwargs, reranked=True)

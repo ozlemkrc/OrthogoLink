@@ -10,7 +10,12 @@ from app.core.config import get_settings
 from app.core.database import init_db, async_session
 from app.api.routes import courses, compare, import_courses, auth
 from app.services.embedding_service import embedding_service
-from app.services.course_service import rebuild_faiss_index, reembed_all_sections
+from app.services.course_service import (
+    rebuild_faiss_index,
+    reembed_all_sections,
+    ensure_pgvector_ready,
+    index_vector_count,
+)
 from app.models.course import Course, CourseSection
 
 logging.basicConfig(
@@ -48,26 +53,46 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
     # Startup
     logger.info("Starting application...")
+
+    # Fail loud on insecure production config rather than silently running with a
+    # forgeable default JWT secret. DEBUG=true bypasses this for local dev.
+    if not settings.DEBUG:
+        issues = settings.production_issues()
+        if issues:
+            for issue in issues:
+                logger.error("INSECURE CONFIG: %s", issue)
+            raise RuntimeError(
+                "Refusing to start with insecure production config: " + " ".join(issues)
+            )
+        for warning in settings.production_warnings():
+            logger.warning("CONFIG: %s", warning)
+
     embedding_service.load_model()
 
-    # Initialize database tables
+    # Initialize database tables (also creates the pgvector extension/column and
+    # backfills section vectors from any legacy binary embeddings).
     await init_db()
 
-    # Try to load existing FAISS index.
-    # load_index() returns False if the index is missing OR if the saved model
-    # name doesn't match the current model (stale embeddings after a model upgrade).
-    if not embedding_service.load_index():
+    if settings.SEARCH_BACKEND == "faiss":
+        # Try to load the persisted FAISS index. load_index() returns False if the
+        # index is missing OR the saved model name no longer matches (stale after a
+        # model upgrade) — in which case re-embed everything.
+        if not embedding_service.load_index():
+            async with async_session() as db:
+                await reembed_all_sections(db)
+        await seed_database()
+        # Sync FAISS metadata with latest DB columns (source university/faculty).
         async with async_session() as db:
-            await reembed_all_sections(db)
+            await rebuild_faiss_index(db)
+    else:
+        # pgvector: search reads the shared DB, so there is no in-process index to
+        # load or rebuild. Seed first, then reconcile the model marker (re-embeds
+        # only if the configured model changed).
+        await seed_database()
+        async with async_session() as db:
+            await ensure_pgvector_ready(db)
 
-    # Seed sample data if empty
-    await seed_database()
-
-    # Sync FAISS metadata with latest DB columns (including source university/faculty)
-    async with async_session() as db:
-        await rebuild_faiss_index(db)
-
-    logger.info("Application ready")
+    logger.info("Application ready (search backend: %s)", settings.SEARCH_BACKEND)
     yield
 
     # Shutdown
@@ -91,6 +116,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Per-IP rate limiting. SlowAPIMiddleware applies RATE_LIMIT to every route via
+# app.state.limiter, so no endpoint signatures change.
+if settings.RATE_LIMIT_ENABLED:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+    from slowapi.util import get_remote_address
+
+    limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
+
 # Register routers
 app.include_router(courses.router, prefix="/api")
 app.include_router(compare.router, prefix="/api")
@@ -101,18 +139,19 @@ app.include_router(auth.router, prefix="/api")
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
-    index_size = embedding_service.index.ntotal if embedding_service.index else 0
-
     # Fetch lightweight DB stats for quick visibility in UI
     course_count = 0
     section_count = 0
+    index_size = 0
     async with async_session() as db:
         course_count = await db.scalar(select(func.count()).select_from(Course))
         section_count = await db.scalar(select(func.count()).select_from(CourseSection))
+        index_size = await index_vector_count(db)
 
     return {
         "status": "healthy",
         "model": settings.MODEL_NAME,
+        "search_backend": settings.SEARCH_BACKEND,
         "similarity_threshold": settings.SIMILARITY_THRESHOLD,
         "index_vectors": index_size,
         "course_count": course_count,

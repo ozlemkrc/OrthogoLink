@@ -109,7 +109,21 @@ def compare_syllabus(
         query_embedding = embedding_service.encode_single(combined_text)
 
         top_k = 20 if (university_filter or department_filter) else 12
-        results = embedding_service.search(query_embedding, top_k=top_k)
+        if settings.RERANK_ENABLED:
+            # Retrieve a wider candidate pool so the cross-encoder has room to
+            # promote a strong pair the bi-encoder ranked just outside top_k.
+            top_k = max(top_k, settings.RERANK_CANDIDATES)
+        results = _search(query_embedding, top_k)
+
+        if settings.RERANK_ENABLED and results:
+            candidate_texts = [
+                f"{r['section_heading']}: {r.get('section_content', '')}"
+                for r in results
+            ]
+            ce_scores = embedding_service.rerank(combined_text, candidate_texts)
+            for r, ce in zip(results, ce_scores):
+                r["score"] = _blend_score(r["score"], float(ce), settings.RERANK_WEIGHT)
+            results.sort(key=lambda r: r["score"], reverse=True)
 
         for result in results:
             score = result["score"]
@@ -245,6 +259,7 @@ def compare_syllabus(
         num_sections=total_input_sections,
         overlapping_section_count=len(overlapping_sections),
         filter_info=filter_info,
+        reranked=settings.RERANK_ENABLED,
     )
 
     return ComparisonResponse(
@@ -270,6 +285,29 @@ def _detect_language(text: str) -> str:
         return lang
     except Exception:
         return "unknown"
+
+
+def _search(query_embedding, top_k: int) -> list[dict]:
+    """Dispatch a similarity search to the configured backend.
+
+    pgvector queries the shared PostgreSQL store (multi-worker safe); faiss uses
+    the legacy in-process index (single worker; also used by eval/benchmark.py).
+    """
+    if settings.SEARCH_BACKEND == "faiss":
+        return embedding_service.search(query_embedding, top_k=top_k)
+    from app.services.vector_search import search_sections
+    return search_sections(query_embedding, top_k=top_k)
+
+
+def _blend_score(cosine: float, cross_encoder: float, weight: float) -> float:
+    """Combine bi-encoder cosine and cross-encoder relevance into one score.
+
+    ``weight`` is clamped to [0, 1]: 0 keeps pure cosine (equivalent to rerank
+    off), 1 uses pure cross-encoder. Both inputs are on a [0, 1] scale, so the
+    blend stays there too and the existing thresholds / profiles remain valid.
+    """
+    weight = max(0.0, min(weight, 1.0))
+    return (1.0 - weight) * cosine + weight * cross_encoder
 
 
 def _clamp_threshold(value: float) -> float:
@@ -316,6 +354,7 @@ def _generate_report(
     num_sections: int,
     overlapping_section_count: int,
     filter_info: str,
+    reranked: bool = False,
 ) -> str:
     class_labels = {
         "high": "HIGH OVERLAP — significant content already covered elsewhere",
@@ -329,6 +368,8 @@ def _generate_report(
         "",
         f"Analyzed {num_sections} input section(s){filter_info}.",
         f"Threshold profile: {profile_name} (cutoff {threshold:.0%}).",
+        f"Scoring: bi-encoder + cross-encoder re-ranking."
+        if reranked else "Scoring: bi-encoder cosine similarity.",
         f"Overall average similarity: {overall_sim:.2%}",
         f"Overlapping sections: {overlapping_section_count}/{num_sections} "
         f"({overlap_pct:.1f}%)",

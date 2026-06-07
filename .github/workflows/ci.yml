@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # The unit tests stub the heavy deps (faiss, sentence-transformers, PyPDF2,
+      # sqlalchemy is lazily imported), so only these light libraries are needed.
+      # This keeps CI fast (no torch download) while still running the real tests.
+      - name: Install test dependencies
+        run: pip install pytest==8.3.4 numpy==1.26.4 pydantic==2.10.3 pydantic-settings==2.7.0
+
+      - name: Run unit tests
+        env:
+          SECRET_KEY: ci-test-secret-key
+        run: python -m pytest tests/ -v

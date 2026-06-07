@@ -7,6 +7,7 @@ pydantic==2.10.3
 pydantic-settings==2.7.0
 sentence-transformers==3.3.1
 faiss-cpu==1.9.0.post1
+pgvector==0.3.6
 PyPDF2==3.0.1
 reportlab==4.2.5
 python-multipart==0.0.19
@@ -18,5 +19,6 @@ aiohttp>=3.10.0
 langdetect==1.0.9
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+slowapi==0.1.9
 bcrypt==4.0.1
 # google-genai removed — Gemini called via REST (aiohttp already present)

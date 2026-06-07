@@ -77,6 +77,9 @@ class Metrics:
 def build_catalog_index(catalog: list[CatalogCourse]) -> None:
     """Embed every catalog course's sections and build the FAISS index, mirroring
     the metadata layout that ``course_service`` produces in production."""
+    # The benchmark is standalone (no database), so it always uses the in-process
+    # FAISS backend regardless of the configured production backend (pgvector).
+    get_settings().SEARCH_BACKEND = "faiss"
     embedding_service.load_model()
 
     all_embeddings: list[np.ndarray] = []
@@ -131,66 +134,64 @@ def evaluate_threshold(
     return Metrics(threshold=threshold, tp=tp, fp=fp, fn=fn, tn=tn)
 
 
-def run() -> dict:
-    settings = get_settings()
-    print(f"Model: {settings.MODEL_NAME}")
-    print(f"Building index from {len(CATALOG)} catalog courses...")
-    build_catalog_index(CATALOG)
-
-    catalog_codes = [c.code for c in CATALOG]
-    print(f"Running {len(QUERIES)} proposal queries through compare_syllabus...\n")
-
+def _collect_per_query_sims(verbose: bool = True) -> list[dict[str, float]]:
+    """Run every query through the production pipeline at the current settings
+    (so the RERANK_ENABLED flag is honored) and return per-query similarities."""
     per_query_sims: list[dict[str, float]] = []
     for query in QUERIES:
         sims = collect_course_similarities(query.text)
         per_query_sims.append(sims)
-        ranked = sorted(sims.items(), key=lambda kv: kv[1], reverse=True)[:3]
-        top_str = ", ".join(f"{code} {score:.2f}" for code, score in ranked) or "—"
-        expected = ", ".join(sorted(query.expected_overlap)) or "(none)"
-        print(f"  {query.name}")
-        print(f"    expected overlap: {expected}")
-        print(f"    top matches:      {top_str}")
+        if verbose:
+            ranked = sorted(sims.items(), key=lambda kv: kv[1], reverse=True)[:3]
+            top_str = ", ".join(f"{code} {score:.2f}" for code, score in ranked) or "—"
+            expected = ", ".join(sorted(query.expected_overlap)) or "(none)"
+            print(f"  {query.name}")
+            print(f"    expected overlap: {expected}")
+            print(f"    top matches:      {top_str}")
+    return per_query_sims
 
-    print("\n" + "=" * 64)
-    print("THRESHOLD SWEEP (binary course-level overlap decision)")
-    print("=" * 64)
+
+def _sweep(per_query_sims, catalog_codes) -> list[Metrics]:
+    return [
+        evaluate_threshold(per_query_sims, t, catalog_codes)
+        for t in SWEEP_THRESHOLDS
+    ]
+
+
+def _print_sweep(sweep: list[Metrics], configured: float) -> Metrics:
     header = f"{'cutoff':>7} {'prec':>6} {'recall':>7} {'F1':>6} {'acc':>6}   TP/FP/FN/TN"
     print(header)
     print("-" * len(header))
-
-    sweep: list[Metrics] = []
-    for t in SWEEP_THRESHOLDS:
-        m = evaluate_threshold(per_query_sims, t, catalog_codes)
-        sweep.append(m)
+    for m in sweep:
         print(
             f"{m.threshold:>7.2f} {m.precision:>6.2f} {m.recall:>7.2f} "
             f"{m.f1:>6.2f} {m.accuracy:>6.2f}   {m.tp}/{m.fp}/{m.fn}/{m.tn}"
         )
-
     best = max(sweep, key=lambda m: (m.f1, m.precision))
-    configured = settings.SIMILARITY_THRESHOLD
     print("-" * len(header))
     print(
         f"\nBest F1 at cutoff {best.threshold:.2f} "
         f"(F1={best.f1:.2f}, precision={best.precision:.2f}, recall={best.recall:.2f})."
     )
-    nearest_to_configured = min(sweep, key=lambda m: abs(m.threshold - configured))
+    nearest = min(sweep, key=lambda m: abs(m.threshold - configured))
     print(
         f"Configured SIMILARITY_THRESHOLD={configured:.2f} → "
-        f"F1={nearest_to_configured.f1:.2f}, "
-        f"precision={nearest_to_configured.precision:.2f}, "
-        f"recall={nearest_to_configured.recall:.2f}."
+        f"F1={nearest.f1:.2f}, precision={nearest.precision:.2f}, recall={nearest.recall:.2f}."
     )
     if abs(best.threshold - configured) > 1e-6:
         print(
             f"Suggestion: cutoff {best.threshold:.2f} scores higher F1 than the "
             f"configured {configured:.2f} on this benchmark."
         )
+    return best
 
+
+def _mode_dict(label: str, sweep: list[Metrics], per_query_sims) -> dict:
+    best = max(sweep, key=lambda m: (m.f1, m.precision))
     return {
-        "model": settings.MODEL_NAME,
-        "configured_threshold": configured,
+        "mode": label,
         "best_threshold": best.threshold,
+        "best_f1": round(best.f1, 4),
         "sweep": [
             {
                 "threshold": m.threshold,
@@ -213,12 +214,93 @@ def run() -> dict:
     }
 
 
+def run(rerank: bool = False, rebuild: bool = True) -> dict:
+    settings = get_settings()
+    settings.RERANK_ENABLED = rerank
+    scoring = "bi-encoder + cross-encoder re-rank" if rerank else "bi-encoder only"
+    print(f"Model: {settings.MODEL_NAME}  |  Scoring: {scoring}")
+    if rerank:
+        print(f"Cross-encoder: {settings.RERANK_MODEL} (weight={settings.RERANK_WEIGHT})")
+    if rebuild:
+        print(f"Building index from {len(CATALOG)} catalog courses...")
+        build_catalog_index(CATALOG)
+
+    catalog_codes = [c.code for c in CATALOG]
+    print(f"Running {len(QUERIES)} proposal queries through compare_syllabus...\n")
+    per_query_sims = _collect_per_query_sims()
+
+    print("\n" + "=" * 64)
+    print(f"THRESHOLD SWEEP — {scoring}")
+    print("=" * 64)
+    sweep = _sweep(per_query_sims, catalog_codes)
+    _print_sweep(sweep, settings.SIMILARITY_THRESHOLD)
+
+    result = _mode_dict("rerank" if rerank else "baseline", sweep, per_query_sims)
+    result["model"] = settings.MODEL_NAME
+    result["configured_threshold"] = settings.SIMILARITY_THRESHOLD
+    return result
+
+
+def run_compare() -> dict:
+    """Run the sweep with re-ranking OFF then ON and print a head-to-head delta —
+    the empirical evidence that the cross-encoder stage improves the decision."""
+    settings = get_settings()
+    print(f"Model: {settings.MODEL_NAME}")
+    print(f"Building index from {len(CATALOG)} catalog courses (shared by both modes)...")
+    build_catalog_index(CATALOG)
+    catalog_codes = [c.code for c in CATALOG]
+    configured = settings.SIMILARITY_THRESHOLD
+
+    results: dict[str, dict] = {}
+    bests: dict[str, Metrics] = {}
+    for label, rerank in (("baseline", False), ("rerank", True)):
+        settings.RERANK_ENABLED = rerank
+        scoring = "bi-encoder + cross-encoder re-rank" if rerank else "bi-encoder only"
+        print("\n" + "=" * 64)
+        print(f"MODE: {label} ({scoring})")
+        if rerank:
+            print(f"Cross-encoder: {settings.RERANK_MODEL} (weight={settings.RERANK_WEIGHT})")
+        print("=" * 64)
+        per_query_sims = _collect_per_query_sims(verbose=False)
+        sweep = _sweep(per_query_sims, catalog_codes)
+        bests[label] = _print_sweep(sweep, configured)
+        results[label] = _mode_dict(label, sweep, per_query_sims)
+
+    base, rer = bests["baseline"], bests["rerank"]
+    print("\n" + "=" * 64)
+    print("HEAD-TO-HEAD (best operating point per mode)")
+    print("=" * 64)
+    print(f"{'mode':>10} {'cutoff':>7} {'prec':>6} {'recall':>7} {'F1':>6}")
+    print(f"{'baseline':>10} {base.threshold:>7.2f} {base.precision:>6.2f} "
+          f"{base.recall:>7.2f} {base.f1:>6.2f}")
+    print(f"{'rerank':>10} {rer.threshold:>7.2f} {rer.precision:>6.2f} "
+          f"{rer.recall:>7.2f} {rer.f1:>6.2f}")
+    delta = rer.f1 - base.f1
+    verdict = (
+        f"Re-ranking improves best F1 by {delta:+.3f}." if delta > 1e-6
+        else f"Re-ranking does not improve best F1 ({delta:+.3f}) on this benchmark."
+    )
+    print(f"\n{verdict}")
+
+    return {
+        "model": settings.MODEL_NAME,
+        "configured_threshold": configured,
+        "baseline": results["baseline"],
+        "rerank": results["rerank"],
+        "best_f1_delta": round(delta, 4),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Overlap-detection evaluation harness")
     parser.add_argument("--json", metavar="PATH", help="Write full results as JSON")
+    parser.add_argument("--rerank", action="store_true",
+                        help="Enable cross-encoder re-ranking for this run")
+    parser.add_argument("--compare", action="store_true",
+                        help="Run baseline vs re-rank head-to-head and report the F1 delta")
     args = parser.parse_args()
 
-    results = run()
+    results = run_compare() if args.compare else run(rerank=args.rerank)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)

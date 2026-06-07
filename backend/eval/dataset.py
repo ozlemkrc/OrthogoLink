@@ -186,6 +186,120 @@ CATALOG: list[CatalogCourse] = [
         department="Statistics",
         faculty="Faculty of Science",
     ),
+    CatalogCourse(
+        code="CENG315",
+        name="Analysis of Algorithms",
+        description=(
+            "Course Content\n"
+            "Asymptotic notation and complexity analysis, recurrence relations, "
+            "divide and conquer, greedy algorithms, dynamic programming, graph "
+            "algorithms including shortest paths and minimum spanning trees, and "
+            "NP-completeness.\n"
+            "Learning Outcomes\n"
+            "Students can analyze the time and space complexity of algorithms and "
+            "design efficient algorithms using standard paradigms.\n"
+        ),
+        university="Orta Doğu Teknik Üniversitesi",
+    ),
+    CatalogCourse(
+        code="CS330",
+        name="Software Engineering",
+        description=(
+            "Course Content\n"
+            "Software development life cycle, requirements engineering, agile and "
+            "waterfall processes, UML modeling, software design patterns, version "
+            "control, testing strategies, and project management.\n"
+            "Learning Outcomes\n"
+            "Students can gather requirements, design software architectures, and "
+            "apply testing and version control in a team project.\n"
+        ),
+    ),
+    CatalogCourse(
+        code="CS340",
+        name="Operating Systems",
+        description=(
+            "Course Content\n"
+            "Processes and threads, CPU scheduling, synchronization and mutual "
+            "exclusion, deadlocks, memory management and virtual memory, paging, "
+            "file systems, and input/output management.\n"
+            "Learning Outcomes\n"
+            "Students can explain how an operating system manages processes, "
+            "memory, and storage, and reason about concurrency and deadlock.\n"
+        ),
+    ),
+    CatalogCourse(
+        code="BLM340",
+        name="İşletim Sistemleri",
+        description=(
+            "Ders İçeriği\n"
+            "Süreçler ve iş parçacıkları, işlemci zamanlama, senkronizasyon ve "
+            "karşılıklı dışlama, kilitlenmeler, bellek yönetimi ve sanal bellek, "
+            "sayfalama, dosya sistemleri ve girdi/çıktı yönetimi.\n"
+            "Öğrenme Çıktıları\n"
+            "Öğrenciler bir işletim sisteminin süreç, bellek ve depolamayı nasıl "
+            "yönettiğini açıklayabilir ve eşzamanlılık sorunlarını çözümleyebilir.\n"
+        ),
+        university="Gebze Teknik Üniversitesi",
+    ),
+    CatalogCourse(
+        code="CS360",
+        name="Computer Networks",
+        description=(
+            "Course Content\n"
+            "The OSI and TCP/IP layered models, application layer protocols, "
+            "transport layer with TCP and UDP, congestion and flow control, "
+            "network layer routing and IP addressing, and link layer and "
+            "Ethernet.\n"
+            "Learning Outcomes\n"
+            "Students can describe how data is transmitted across layered network "
+            "protocols and analyze routing and transport behavior.\n"
+        ),
+    ),
+    CatalogCourse(
+        code="CS450",
+        name="Deep Learning",
+        description=(
+            "Course Content\n"
+            "Feedforward neural networks, backpropagation, convolutional neural "
+            "networks, recurrent networks, regularization and optimization, "
+            "gradient descent variants, and training deep models for vision and "
+            "sequence tasks.\n"
+            "Learning Outcomes\n"
+            "Students can design, train, and regularize deep neural networks and "
+            "diagnose optimization and generalization problems.\n"
+        ),
+    ),
+    CatalogCourse(
+        code="IST300",
+        name="Data Mining",
+        description=(
+            "Course Content\n"
+            "Data preprocessing, feature selection, classification and regression, "
+            "clustering, association rule mining, ensemble methods, and evaluation "
+            "of predictive models on large datasets.\n"
+            "Learning Outcomes\n"
+            "Students can apply data mining techniques to discover patterns and "
+            "build and evaluate predictive models.\n"
+        ),
+        department="Statistics",
+        faculty="Faculty of Science",
+    ),
+    CatalogCourse(
+        code="MATH202",
+        name="Multivariable Calculus",
+        description=(
+            "Course Content\n"
+            "Functions of several variables, partial derivatives, gradients, "
+            "multiple integrals, line and surface integrals, the chain rule in "
+            "several variables, and the theorems of Green, Stokes, and "
+            "divergence.\n"
+            "Learning Outcomes\n"
+            "Students can differentiate and integrate functions of several "
+            "variables and apply vector calculus theorems.\n"
+        ),
+        department="Mathematics",
+        faculty="Faculty of Science",
+    ),
 ]
 
 
@@ -205,8 +319,9 @@ QUERIES: list[Query] = [
             "Students will analyze algorithmic complexity and choose suitable "
             "data structures to solve computational problems efficiently.\n"
         ),
-        # Overlaps both the EN and the TR data-structures course (cross-lingual).
-        expected_overlap={"CS301", "BLM301"},
+        # Overlaps the EN + TR data-structures courses (cross-lingual) and the
+        # algorithm-analysis course, which shares complexity/DP/graph content.
+        expected_overlap={"CS301", "BLM301", "CENG315"},
     ),
     Query(
         name="Makine Öğrenmesine Giriş (TR proposal)",
@@ -261,6 +376,93 @@ QUERIES: list[Query] = [
             "istatistiksel çıkarım yapabilir.\n"
         ),
         expected_overlap={"IST220"},
+    ),
+    Query(
+        name="Operating Systems Concepts (EN proposal)",
+        text=(
+            "Course Content\n"
+            "Process and thread management, CPU scheduling algorithms, "
+            "synchronization primitives and mutual exclusion, deadlock detection "
+            "and avoidance, virtual memory and paging, and file system design.\n"
+            "Learning Outcomes\n"
+            "Students will reason about concurrency, scheduling, and memory "
+            "management in modern operating systems.\n"
+        ),
+        # EN proposal overlapping the EN and TR operating-systems courses.
+        expected_overlap={"CS340", "BLM340"},
+    ),
+    Query(
+        name="Bilgisayar Ağları (TR proposal)",
+        text=(
+            "Ders İçeriği\n"
+            "Katmanlı ağ modelleri OSI ve TCP/IP, uygulama katmanı protokolleri, "
+            "TCP ve UDP ile taşıma katmanı, tıkanıklık ve akış denetimi, ağ "
+            "katmanında yönlendirme ve IP adresleme, bağlantı katmanı ve "
+            "Ethernet.\n"
+            "Öğrenme Çıktıları\n"
+            "Öğrenciler verinin katmanlı ağ protokolleri üzerinden nasıl "
+            "iletildiğini açıklayabilir ve yönlendirmeyi çözümleyebilir.\n"
+        ),
+        expected_overlap={"CS360"},
+    ),
+    Query(
+        name="Deep Learning for Vision (EN proposal)",
+        text=(
+            "Course Content\n"
+            "Neural network fundamentals, backpropagation, convolutional neural "
+            "networks, regularization, optimization with stochastic gradient "
+            "descent, and training deep models. Includes supervised learning, "
+            "overfitting, and model evaluation.\n"
+            "Learning Outcomes\n"
+            "Students will build and train deep neural networks and diagnose "
+            "optimization and generalization issues.\n"
+        ),
+        # Genuinely overlaps both the dedicated deep-learning course and the
+        # machine-learning core (neural nets, gradient descent, overfitting).
+        expected_overlap={"CS450", "CS420"},
+    ),
+    Query(
+        name="Yazılım Mühendisliği (TR proposal)",
+        text=(
+            "Ders İçeriği\n"
+            "Yazılım geliştirme yaşam döngüsü, gereksinim mühendisliği, çevik ve "
+            "şelale süreçleri, UML modelleme, yazılım tasarım örüntüleri, sürüm "
+            "kontrolü, test stratejileri ve proje yönetimi.\n"
+            "Öğrenme Çıktıları\n"
+            "Öğrenciler gereksinim toplayabilir, yazılım mimarisi tasarlayabilir "
+            "ve bir takım projesinde test ve sürüm kontrolü uygulayabilir.\n"
+        ),
+        expected_overlap={"CS330"},
+    ),
+    Query(
+        name="Data Mining & Predictive Modeling (EN proposal)",
+        text=(
+            "Course Content\n"
+            "Data preprocessing and feature selection, classification and "
+            "regression, clustering, association rule mining, ensemble methods, "
+            "and evaluation of predictive models on large datasets.\n"
+            "Learning Outcomes\n"
+            "Students will apply data mining methods to discover patterns and "
+            "build evaluated predictive models.\n"
+        ),
+        # Overlaps the data-mining course and the ML core (shared predictive
+        # modeling, classification, evaluation). Must NOT match NLP or databases.
+        expected_overlap={"IST300", "CS420"},
+    ),
+    Query(
+        name="Multivariable Calculus (EN proposal)",
+        text=(
+            "Course Content\n"
+            "Functions of several variables, partial derivatives and gradients, "
+            "multiple integrals, line and surface integrals, and the theorems of "
+            "Green, Stokes, and divergence.\n"
+            "Learning Outcomes\n"
+            "Students will differentiate and integrate multivariable functions "
+            "and apply vector calculus theorems.\n"
+        ),
+        # Precision test: overlaps multivariable calculus but NOT linear algebra
+        # (MATH201) — a lenient model that conflates math subfields will fail here.
+        expected_overlap={"MATH202"},
     ),
     Query(
         name="Marine Biology of Coral Reefs (orthogonal control)",

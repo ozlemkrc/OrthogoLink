@@ -5,6 +5,32 @@ from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKe
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
+from app.core.config import get_settings
+
+# pgvector is the production search backend. Import it lazily with a fallback so
+# the model module still imports in environments without pgvector installed
+# (e.g. the stubbed unit-test env, which never touches this column).
+try:
+    from pgvector.sqlalchemy import Vector
+    _HAS_PGVECTOR = True
+except ImportError:  # pragma: no cover - exercised only without pgvector
+    _HAS_PGVECTOR = False
+
+    def Vector(_dim):  # type: ignore  # noqa: N802 - shim mirrors pgvector's API
+        """Fallback column type when pgvector is unavailable (tests only)."""
+        return LargeBinary()
+
+_settings = get_settings()
+_EMBEDDING_DIM = _settings.EMBEDDING_DIM
+
+# The pgvector column is only a real ``vector(...)`` type when the pgvector backend
+# is active (and the lib is installed). Under the faiss backend it degrades to a
+# placeholder LargeBinary so the schema works on a plain Postgres image with no
+# vector extension. The search backend is a deploy-time choice.
+if _HAS_PGVECTOR and _settings.SEARCH_BACKEND == "pgvector":
+    _EMBEDDING_COLUMN_TYPE = Vector(_EMBEDDING_DIM)
+else:
+    _EMBEDDING_COLUMN_TYPE = LargeBinary()
 
 
 class Course(Base):
@@ -39,7 +65,8 @@ class CourseSection(Base):
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     heading = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(LargeBinary, nullable=True)  # serialized numpy array
+    embedding = Column(LargeBinary, nullable=True)  # serialized numpy array (legacy / FAISS rebuild)
+    embedding_vec = Column(_EMBEDDING_COLUMN_TYPE, nullable=True)  # pgvector search column (vector type only under pgvector backend)
 
     course = relationship("Course", back_populates="sections")
 

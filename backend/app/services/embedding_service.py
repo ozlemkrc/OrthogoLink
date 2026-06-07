@@ -27,11 +27,13 @@ class EmbeddingService:
 
     def __init__(self):
         self.model: SentenceTransformer = None
+        self.cross_encoder = None  # lazily loaded CrossEncoder for re-ranking
         self.index: faiss.IndexFlatIP = None  # Inner-product (cosine after normalization)
         self.dimension: int = 384  # paraphrase-multilingual-MiniLM-L12-v2 output dimension
         self.id_map: list[dict] = []  # Maps FAISS row index → section metadata
         self._index_path = settings.FAISS_INDEX_PATH
         self._lock = threading.Lock()
+        self._ce_lock = threading.Lock()
 
     def load_model(self):
         """Load the sentence-transformer model into memory."""
@@ -39,6 +41,42 @@ class EmbeddingService:
         self.model = SentenceTransformer(settings.MODEL_NAME)
         self.dimension = self.model.get_sentence_embedding_dimension()
         logger.info(f"Model loaded. Embedding dimension: {self.dimension}")
+
+    # ── Cross-encoder re-ranking ────────────────────────────
+    def load_cross_encoder(self):
+        """Load the cross-encoder re-ranking model on first use.
+
+        Imported lazily (and only when re-ranking is actually requested) so the
+        bi-encoder-only deployment never pays the extra model download, and so
+        the stubbed unit-test environment never needs the real dependency.
+        """
+        if self.cross_encoder is not None:
+            return
+        with self._ce_lock:
+            if self.cross_encoder is not None:
+                return
+            from sentence_transformers import CrossEncoder
+            logger.info(f"Loading cross-encoder: {settings.RERANK_MODEL}")
+            self.cross_encoder = CrossEncoder(settings.RERANK_MODEL)
+            logger.info("Cross-encoder loaded")
+
+    def rerank(self, query: str, candidates: list[str]) -> np.ndarray:
+        """Score each candidate's relevance to ``query`` with the cross-encoder.
+
+        Returns scores squashed to [0, 1] via a logistic sigmoid so they can be
+        blended with cosine similarity on the same scale. Returns an empty array
+        for empty input.
+        """
+        if not candidates:
+            return np.empty(0, dtype=np.float32)
+        if self.cross_encoder is None:
+            self.load_cross_encoder()
+        pairs = [[query, c] for c in candidates]
+        raw = self.cross_encoder.predict(
+            pairs, convert_to_numpy=True, show_progress_bar=False
+        )
+        # CrossEncoder emits unbounded relevance logits; logistic-squash to [0,1].
+        return 1.0 / (1.0 + np.exp(-raw.astype(np.float64)))
 
     def encode(self, texts: list[str]) -> np.ndarray:
         """Encode a list of texts into normalized embeddings."""

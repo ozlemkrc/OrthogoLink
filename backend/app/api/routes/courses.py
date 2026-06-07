@@ -105,8 +105,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         select(func.avg(ComparisonResult.overall_similarity))
     )
 
-    from app.services.embedding_service import embedding_service
-    index_size = embedding_service.index.ntotal if embedding_service.index else 0
+    index_size = await course_service.index_vector_count(db)
 
     return {
         "course_count": course_count,

@@ -1,12 +1,14 @@
 """
 Async database engine and session management.
 """
+import logging
 import re
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 engine = create_async_engine(
@@ -20,6 +22,17 @@ async_session = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
+)
+
+# Synchronous engine used by the pgvector search path (vector_search.py). The
+# comparison pipeline is synchronous (CPU-bound embedding already blocks), so the
+# similarity query runs over this engine. Lazily connects — no connection is
+# opened until the first search, so importing this module never needs the DB.
+sync_engine = create_engine(
+    settings.DATABASE_URL_SYNC,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
 )
 
 
@@ -42,12 +55,72 @@ async def get_db() -> AsyncSession:
 
 async def init_db():
     """Create all tables on startup."""
+    pgvector = settings.SEARCH_BACKEND == "pgvector"
     async with engine.begin() as conn:
+        # The extension must exist before create_all, so a fresh DB can create the
+        # course_sections.embedding_vec column with the vector(...) type.
+        if pgvector:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
         await _migrate_course_source_columns(conn)
         await _migrate_course_composite_uniqueness(conn)
         await _backfill_course_source_columns(conn)
         await _migrate_user_role(conn)
+        if pgvector:
+            await _migrate_pgvector(conn)
+            await _backfill_embedding_vectors(conn)
+
+
+async def _migrate_pgvector(conn):
+    """Ensure the pgvector column, ANN index, and model-marker table exist."""
+    dim = settings.EMBEDDING_DIM
+    await conn.execute(
+        text(f"ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS embedding_vec vector({dim})")
+    )
+    # Singleton table marking which embedding model the stored vectors were built
+    # with — mirrors the FAISS meta check so a model change triggers a re-embed.
+    await conn.execute(text(
+        "CREATE TABLE IF NOT EXISTS embedding_meta ("
+        " id INTEGER PRIMARY KEY DEFAULT 1,"
+        " model_name TEXT,"
+        " CONSTRAINT embedding_meta_singleton CHECK (id = 1))"
+    ))
+    # HNSW index for fast approximate cosine search; harmless on an empty table.
+    await conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_course_sections_embedding_vec "
+        "ON course_sections USING hnsw (embedding_vec vector_cosine_ops)"
+    ))
+
+
+async def _backfill_embedding_vectors(conn):
+    """Populate embedding_vec from the legacy binary ``embedding`` column for any
+    rows migrated from a pre-pgvector database. New writes set both columns."""
+    import numpy as np
+
+    rows = await conn.execute(text(
+        "SELECT id, embedding FROM course_sections "
+        "WHERE embedding_vec IS NULL AND embedding IS NOT NULL"
+    ))
+    pending = rows.fetchall()
+    if not pending:
+        return
+
+    migrated = 0
+    for row in pending:
+        try:
+            arr = np.frombuffer(row.embedding, dtype=np.float32)
+        except Exception:
+            continue
+        if arr.size != settings.EMBEDDING_DIM:
+            continue
+        # Numeric-only literal (no bound vector param) → driver-agnostic, safe.
+        literal = "[" + ",".join(f"{x:.8f}" for x in arr.tolist()) + "]"
+        await conn.execute(
+            text(f"UPDATE course_sections SET embedding_vec = '{literal}'::vector WHERE id = :id"),
+            {"id": row.id},
+        )
+        migrated += 1
+    logger.info("pgvector backfill: populated %d section vector(s) from legacy binary", migrated)
 
 
 UNIVERSITY_PREFIX_MAP = {
