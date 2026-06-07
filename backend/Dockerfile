@@ -3,8 +3,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # System dependencies
+# fonts-dejavu-core: Unicode TTF so Turkish course names render in PDF reports
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies

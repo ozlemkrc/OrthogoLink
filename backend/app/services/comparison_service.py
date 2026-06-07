@@ -81,11 +81,19 @@ def compare_syllabus(
     university_filter: Optional[List[str]] = None,
     department_filter: Optional[List[str]] = None,
     threshold_profile: Optional[str] = None,
+    custom_threshold: Optional[float] = None,
 ) -> ComparisonResponse:
     profile_name = (threshold_profile or DEFAULT_PROFILE).lower()
     profile = THRESHOLD_PROFILES.get(profile_name, THRESHOLD_PROFILES[DEFAULT_PROFILE])
     threshold = profile["threshold"]
     weak_floor = profile["weak_floor"]
+
+    # A user-supplied threshold overrides the profile's cutoff. The weak-match
+    # floor (noise cutoff) is kept strictly below it so matches can still surface.
+    if custom_threshold is not None:
+        threshold = _clamp_threshold(custom_threshold)
+        profile_name = "custom"
+        weak_floor = max(min(weak_floor, threshold - 0.1), 0.1)
 
     input_sections = split_into_sections(text)
     logger.info(
@@ -262,6 +270,15 @@ def _detect_language(text: str) -> str:
         return lang
     except Exception:
         return "unknown"
+
+
+def _clamp_threshold(value: float) -> float:
+    """Constrain a user-supplied threshold to a sane similarity range."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return THRESHOLD_PROFILES[DEFAULT_PROFILE]["threshold"]
+    return max(0.3, min(value, 0.95))
 
 
 def _classify_overlap(overlap_pct: float) -> str:

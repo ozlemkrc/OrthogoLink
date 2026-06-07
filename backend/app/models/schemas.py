@@ -79,6 +79,7 @@ class CourseListOut(BaseModel):
 class CompareTextRequest(BaseModel):
     text: str
     threshold_profile: Optional[str] = None  # "strict" | "balanced" | "lenient"
+    custom_threshold: Optional[float] = None  # user-chosen cutoff 0-1; overrides profile
     include_ai_explanations: bool = False
     explanation_language: Optional[str] = None  # "tr" | "en"
 

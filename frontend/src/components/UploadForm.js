@@ -27,6 +27,9 @@ function UploadForm({ onResult }) {
   const [universities, setUniversities] = useState([]);
   const [departments, setDepartments] = useState([]);
 
+  // Similarity threshold (percent). 70% is the default cutoff.
+  const [threshold, setThreshold] = useState(70);
+
   // AI explanation options
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiLanguage, setAiLanguage] = useState("en");
@@ -46,7 +49,11 @@ function UploadForm({ onResult }) {
     onResult(null);
 
     try {
-      const aiOptions = { includeAiExplanations: aiEnabled, explanationLanguage: aiLanguage };
+      const aiOptions = {
+        includeAiExplanations: aiEnabled,
+        explanationLanguage: aiLanguage,
+        customThreshold: threshold / 100,
+      };
       let result;
       if (mode === "text") {
         if (text.trim().length < 50) {
@@ -218,6 +225,25 @@ function UploadForm({ onResult }) {
             )}
           </div>
         )}
+      </div>
+
+      {/* Similarity threshold */}
+      <div className="threshold-row">
+        <span className="add-course-label" title="Matches at or above this similarity are flagged as overlaps">
+          Similarity threshold
+        </span>
+        <div className="threshold-chips">
+          {[50, 60, 70, 80, 90].map((v) => (
+            <button
+              key={v}
+              type="button"
+              className={`threshold-chip ${threshold === v ? "active" : ""}`}
+              onClick={() => setThreshold(v)}
+            >
+              {v}%
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* AI explanation controls */}

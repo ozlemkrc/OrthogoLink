@@ -1839,6 +1839,55 @@ tbody tr.row-related {
   min-width: 80px;
 }
 
+/* -- Similarity threshold -- */
+.threshold-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.threshold-row .add-course-label {
+  margin: 0;
+  cursor: help;
+}
+
+.threshold-chips {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.threshold-chip {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface, #fff);
+  color: var(--text-secondary);
+  border: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.threshold-chip:first-child {
+  border-left: none;
+}
+
+.threshold-chip:hover {
+  background: var(--surface-alt);
+  color: var(--text-primary);
+}
+
+.threshold-chip.active {
+  background: var(--accent, #2d6cdf);
+  color: #fff;
+}
+
 /* -- Tables: shared cells -- */
 .cell-id {
   color: var(--text-secondary);

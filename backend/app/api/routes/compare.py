@@ -19,6 +19,7 @@ from app.models.course import Course, ComparisonResult, SectionMatch, User
 from app.models.schemas import CompareTextRequest, ComparisonResponse
 from app.services.comparison_service import compare_syllabus
 from app.services.pdf_service import extract_text_from_pdf
+from app.services.report_pdf_service import generate_report_pdf
 from app.services.llm_explanation_service import generate_ai_summary
 
 router = APIRouter(prefix="/compare", tags=["Comparison"])
@@ -50,6 +51,7 @@ class CrossUniCompareRequest(BaseModel):
     university_filter: Optional[List[str]] = None
     department_filter: Optional[List[str]] = None
     threshold_profile: Optional[str] = None  # strict | balanced | lenient
+    custom_threshold: Optional[float] = None  # user-chosen cutoff 0-1; overrides profile
     include_ai_explanations: bool = False
     explanation_language: Optional[str] = None  # "tr" | "en"
 
@@ -63,7 +65,11 @@ async def compare_text(request: CompareTextRequest, db: AsyncSession = Depends(g
             detail="Input text is too short. Please provide a meaningful syllabus text.",
         )
     try:
-        result = compare_syllabus(request.text, threshold_profile=request.threshold_profile)
+        result = compare_syllabus(
+            request.text,
+            threshold_profile=request.threshold_profile,
+            custom_threshold=request.custom_threshold,
+        )
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
             await _add_ai_summary(result, lang)
@@ -78,6 +84,7 @@ async def compare_text(request: CompareTextRequest, db: AsyncSession = Depends(g
 async def compare_pdf(
     file: UploadFile = File(...),
     threshold_profile: Optional[str] = None,
+    custom_threshold: Optional[float] = None,
     include_ai_explanations: bool = False,
     explanation_language: Optional[str] = None,
     university_filter: Optional[List[str]] = Query(None),
@@ -101,6 +108,7 @@ async def compare_pdf(
         result = compare_syllabus(
             text,
             threshold_profile=threshold_profile,
+            custom_threshold=custom_threshold,
             university_filter=university_filter or None,
             department_filter=department_filter or None,
         )
@@ -132,6 +140,7 @@ async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSes
             university_filter=request.university_filter,
             department_filter=request.department_filter,
             threshold_profile=request.threshold_profile,
+            custom_threshold=request.custom_threshold,
         )
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
@@ -266,6 +275,22 @@ async def export_csv(request: CompareTextRequest):
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=orthogonality-report.csv"},
+    )
+
+
+@router.post("/export-pdf")
+async def export_pdf(result: ComparisonResponse):
+    """Render the comparison result the user is viewing as a detailed PDF report."""
+    try:
+        pdf_bytes = generate_report_pdf(result)
+    except Exception as e:
+        logger.error("PDF report generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not generate PDF report.")
+
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=orthogonality-report.pdf"},
     )
 
 

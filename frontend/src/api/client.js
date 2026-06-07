@@ -90,9 +90,10 @@ export async function fetchDashboardStats() {
  * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string }} [options]
  */
 export async function compareText(text, options = {}) {
-  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null } = options;
+  const { thresholdProfile, customThreshold = null, includeAiExplanations = false, explanationLanguage = null } = options;
   const body = { text };
   if (thresholdProfile) body.threshold_profile = thresholdProfile;
+  if (customThreshold != null) body.custom_threshold = customThreshold;
   if (includeAiExplanations) body.include_ai_explanations = true;
   if (explanationLanguage) body.explanation_language = explanationLanguage;
   const res = await client.post("/compare/text", body);
@@ -104,11 +105,12 @@ export async function compareText(text, options = {}) {
  * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string, universityFilter?: string[]|null, departmentFilter?: string[]|null }} [options]
  */
 export async function comparePdf(file, options = {}) {
-  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null, universityFilter = null, departmentFilter = null } = options;
+  const { thresholdProfile, customThreshold = null, includeAiExplanations = false, explanationLanguage = null, universityFilter = null, departmentFilter = null } = options;
   const form = new FormData();
   form.append("file", file);
   const params = {};
   if (thresholdProfile) params.threshold_profile = thresholdProfile;
+  if (customThreshold != null) params.custom_threshold = customThreshold;
   if (includeAiExplanations) params.include_ai_explanations = true;
   if (explanationLanguage) params.explanation_language = explanationLanguage;
   if (universityFilter?.length) params.university_filter = universityFilter;
@@ -127,12 +129,13 @@ export async function comparePdf(file, options = {}) {
  * @param {{ thresholdProfile?: string, includeAiExplanations?: boolean, explanationLanguage?: string }} [options]
  */
 export async function crossUniversityCompare(text, universityFilter = null, departmentFilter = null, options = {}) {
-  const { thresholdProfile, includeAiExplanations = false, explanationLanguage = null } = options;
+  const { thresholdProfile, customThreshold = null, includeAiExplanations = false, explanationLanguage = null } = options;
   const res = await client.post("/compare/cross-university", {
     text,
     university_filter: universityFilter,
     department_filter: departmentFilter,
     ...(thresholdProfile ? { threshold_profile: thresholdProfile } : {}),
+    ...(customThreshold != null ? { custom_threshold: customThreshold } : {}),
     ...(includeAiExplanations ? { include_ai_explanations: true } : {}),
     ...(explanationLanguage ? { explanation_language: explanationLanguage } : {}),
   });
@@ -146,6 +149,17 @@ export async function fetchComparisonHistory(limit = 20) {
 
 export async function exportCsv(text) {
   const res = await client.post("/compare/export-csv", { text }, {
+    responseType: "blob",
+  });
+  return res.data;
+}
+
+/**
+ * Render the comparison result the user is viewing as a detailed PDF report.
+ * @param {object} result - the full ComparisonResponse object
+ */
+export async function exportPdf(result) {
+  const res = await client.post("/compare/export-pdf", result, {
     responseType: "blob",
   });
   return res.data;

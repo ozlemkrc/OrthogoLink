@@ -1,19 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { downloadBlob } from "../utils/download";
 import { getPercentageLevel, getSimilarityLevel } from "../utils/similarity";
-import { fetchCourse } from "../api/client";
+import { fetchCourse, exportPdf } from "../api/client";
 
 function ResultsDisplay({ data }) {
   const [expandedCourse, setExpandedCourse] = useState(null);
   const [onlyOverlaps, setOnlyOverlaps] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   if (!data) return null;
 
   const { overall_similarity, overlap_percentage, top_courses, section_matches, report_summary, ai_summary, ai_summary_source } = data;
 
-  const downloadReport = () => {
-    const blob = new Blob([report_summary], { type: "text/plain" });
-    downloadBlob(blob, "orthogonality-report.txt");
+  const downloadReport = async () => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      const blob = await exportPdf(data);
+      downloadBlob(blob, "orthogonality-report.pdf");
+    } catch (err) {
+      setDownloadError("Could not generate the PDF report. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const overlapCount = top_courses.filter((c) => c.is_overlap).length;
@@ -54,11 +64,15 @@ function ResultsDisplay({ data }) {
           <div className="verdict-text">{verdictText}</div>
         </div>
         <div className="verdict-actions">
-          <button className="btn btn-primary" onClick={downloadReport}>
-            ↓ Download Report
+          <button className="btn btn-primary" onClick={downloadReport} disabled={downloading}>
+            {downloading ? "Generating PDF…" : "↓ Download PDF Report"}
           </button>
         </div>
       </div>
+
+      {downloadError && (
+        <div className="error-msg" role="alert"><span>⚠</span> {downloadError}</div>
+      )}
 
       {/* Stats */}
       <div className="stats-grid">
@@ -220,7 +234,9 @@ function ResultsDisplay({ data }) {
       <div className="card">
         <div className="card-row">
           <h2>Analysis Report</h2>
-          <button className="btn-sm btn-ghost" onClick={downloadReport}>↓ Download</button>
+          <button className="btn-sm btn-ghost" onClick={downloadReport} disabled={downloading}>
+            {downloading ? "Generating PDF…" : "↓ Download PDF"}
+          </button>
         </div>
         <div className="report">{report_summary}</div>
       </div>

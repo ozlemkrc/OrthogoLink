@@ -10,6 +10,7 @@ function CrossUniCompare() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
+  const [threshold, setThreshold] = useState(70);
 
   useEffect(() => {
     fetchUniversities().then(setUniversities).catch(() => {});
@@ -47,7 +48,9 @@ function CrossUniCompare() {
         universityFilter = selectedUnis.flatMap((code) => uniPrefixMap[code] || []);
       }
 
-      const result = await crossUniversityCompare(text, universityFilter);
+      const result = await crossUniversityCompare(text, universityFilter, null, {
+        customThreshold: threshold / 100,
+      });
       setResults(result);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Comparison failed");
@@ -135,6 +138,25 @@ Midterm: 30%, Final: 35%, Projects: 35%`;
           >
             Use Sample
           </button>
+        </div>
+
+        {/* Similarity threshold */}
+        <div className="threshold-row">
+          <span className="add-course-label" title="Matches at or above this similarity are flagged as overlaps">
+            Similarity threshold
+          </span>
+          <div className="threshold-chips">
+            {[50, 60, 70, 80, 90].map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={`threshold-chip ${threshold === v ? "active" : ""}`}
+                onClick={() => setThreshold(v)}
+              >
+                {v}%
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && <div className="error-msg">{error}</div>}
