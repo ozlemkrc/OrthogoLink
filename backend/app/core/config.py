@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
     SIMILARITY_THRESHOLD: float = 0.70
 
+    # Input limits — guard against oversized payloads that would blow up memory
+    # or stall the embedding step. Tunable via env for larger syllabi.
+    MIN_INPUT_CHARS: int = 50            # below this, input is not meaningful
+    MAX_INPUT_CHARS: int = 50_000        # ~15-20 pages of syllabus text
+    MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024  # 10 MB PDF upload cap
+
     # FAISS index path
     FAISS_INDEX_PATH: str = "/app/data/faiss_index"
 

@@ -18,6 +18,11 @@ from app.core.security import get_current_user
 from app.models.course import Course, ComparisonResult, SectionMatch, User
 from app.models.schemas import CompareTextRequest, ComparisonResponse
 from app.services.comparison_service import compare_syllabus
+from app.services.input_guard import (
+    validate_syllabus_text,
+    check_upload_size,
+    InputValidationError,
+)
 from app.services.pdf_service import extract_text_from_pdf
 from app.services.report_pdf_service import generate_report_pdf
 from app.services.llm_explanation_service import generate_ai_summary
@@ -59,21 +64,20 @@ class CrossUniCompareRequest(BaseModel):
 @router.post("/text", response_model=ComparisonResponse)
 async def compare_text(request: CompareTextRequest, db: AsyncSession = Depends(get_db)):
     """Compare pasted syllabus text against stored courses."""
-    if len(request.text.strip()) < 50:
-        raise HTTPException(
-            status_code=400,
-            detail="Input text is too short. Please provide a meaningful syllabus text.",
-        )
+    try:
+        text = validate_syllabus_text(request.text)
+    except InputValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     try:
         result = compare_syllabus(
-            request.text,
+            text,
             threshold_profile=request.threshold_profile,
             custom_threshold=request.custom_threshold,
         )
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
             await _add_ai_summary(result, lang)
-        await _save_comparison(db, request.text, result)
+        await _save_comparison(db, text, result)
         return result
     except Exception as e:
         logger.error("Text comparison failed: %s", e, exc_info=True)
@@ -97,13 +101,18 @@ async def compare_pdf(
 
     try:
         contents = await file.read()
-        text = extract_text_from_pdf(contents)
+        try:
+            check_upload_size(len(contents))
+        except InputValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
-        if len(text.strip()) < 50:
-            raise HTTPException(
-                status_code=400,
-                detail="Could not extract enough text from the PDF.",
-            )
+        extracted = extract_text_from_pdf(contents)
+        try:
+            # Allow a low floor here (a near-empty PDF should fail clearly) while
+            # still enforcing the upper bound on extracted text.
+            text = validate_syllabus_text(extracted, min_chars=50)
+        except InputValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         result = compare_syllabus(
             text,
@@ -131,12 +140,14 @@ async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSes
     Compare syllabus against courses from specific universities.
     Filter by university code prefixes (e.g., BLM for GTU, CENG for METU/IYTE).
     """
-    if len(request.text.strip()) < 50:
-        raise HTTPException(status_code=400, detail="Input text is too short.")
+    try:
+        text = validate_syllabus_text(request.text)
+    except InputValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     try:
         result = compare_syllabus(
-            request.text,
+            text,
             university_filter=request.university_filter,
             department_filter=request.department_filter,
             threshold_profile=request.threshold_profile,
@@ -145,7 +156,7 @@ async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSes
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
             await _add_ai_summary(result, lang, is_cross_university=True)
-        await _save_comparison(db, request.text, result)
+        await _save_comparison(db, text, result)
         return result
     except Exception as e:
         logger.error("Cross-university comparison failed: %s", e, exc_info=True)

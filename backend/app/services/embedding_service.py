@@ -7,6 +7,7 @@ import faiss
 import os
 import pickle
 import logging
+import threading
 from sentence_transformers import SentenceTransformer
 from app.core.config import get_settings
 
@@ -15,7 +16,14 @@ settings = get_settings()
 
 
 class EmbeddingService:
-    """Singleton-style service for embedding generation and FAISS indexing."""
+    """Singleton-style service for embedding generation and FAISS indexing.
+
+    Index mutations and persistence are guarded by ``_lock`` so concurrent
+    requests within a process cannot corrupt the in-memory index or race on the
+    on-disk files. NOTE: the index lives in process memory, so the app must run
+    with a SINGLE worker — with multiple workers each holds its own copy and
+    runtime add/delete mutations would not propagate. See tests/README.md.
+    """
 
     def __init__(self):
         self.model: SentenceTransformer = None
@@ -23,6 +31,7 @@ class EmbeddingService:
         self.dimension: int = 384  # paraphrase-multilingual-MiniLM-L12-v2 output dimension
         self.id_map: list[dict] = []  # Maps FAISS row index → section metadata
         self._index_path = settings.FAISS_INDEX_PATH
+        self._lock = threading.Lock()
 
     def load_model(self):
         """Load the sentence-transformer model into memory."""
@@ -48,19 +57,21 @@ class EmbeddingService:
 
     def build_index(self, embeddings: np.ndarray, metadata: list[dict]):
         """Build a new FAISS index from embeddings and metadata."""
-        self.index = faiss.IndexFlatIP(self.dimension)
-        self.index.add(embeddings.astype(np.float32))
-        self.id_map = metadata
-        logger.info(f"FAISS index built with {self.index.ntotal} vectors")
+        with self._lock:
+            self.index = faiss.IndexFlatIP(self.dimension)
+            self.index.add(embeddings.astype(np.float32))
+            self.id_map = metadata
+            logger.info(f"FAISS index built with {self.index.ntotal} vectors")
 
     def add_to_index(self, embeddings: np.ndarray, metadata: list[dict]):
         """Add embeddings to the existing FAISS index."""
         if self.index is None:
             self.build_index(embeddings, metadata)
             return
-        self.index.add(embeddings.astype(np.float32))
-        self.id_map.extend(metadata)
-        logger.info(f"Added {len(metadata)} vectors. Total: {self.index.ntotal}")
+        with self._lock:
+            self.index.add(embeddings.astype(np.float32))
+            self.id_map.extend(metadata)
+            logger.info(f"Added {len(metadata)} vectors. Total: {self.index.ntotal}")
 
     def search(self, query_embedding: np.ndarray, top_k: int = 10) -> list[dict]:
         """
@@ -86,12 +97,27 @@ class EmbeddingService:
     # ── Persistence ─────────────────────────────────────────
 
     def save_index(self):
-        """Persist the FAISS index and metadata (with model name) to disk."""
+        """Persist the FAISS index and metadata atomically.
+
+        Each file is written to a ``.tmp`` sibling and then ``os.replace``d into
+        place — an atomic rename on the same filesystem — so a crash or a
+        concurrent reader never observes a half-written index that would fail to
+        load on the next startup.
+        """
+        if self.index is None:
+            return
         os.makedirs(os.path.dirname(self._index_path), exist_ok=True)
-        if self.index is not None:
-            faiss.write_index(self.index, f"{self._index_path}.faiss")
-            with open(f"{self._index_path}.meta", "wb") as f:
+        faiss_path = f"{self._index_path}.faiss"
+        meta_path = f"{self._index_path}.meta"
+
+        with self._lock:
+            faiss_tmp = f"{faiss_path}.tmp"
+            meta_tmp = f"{meta_path}.tmp"
+            faiss.write_index(self.index, faiss_tmp)
+            with open(meta_tmp, "wb") as f:
                 pickle.dump({"id_map": self.id_map, "model_name": settings.MODEL_NAME}, f)
+            os.replace(faiss_tmp, faiss_path)
+            os.replace(meta_tmp, meta_path)
             logger.info(f"FAISS index saved to {self._index_path}")
 
     def load_index(self) -> bool:
