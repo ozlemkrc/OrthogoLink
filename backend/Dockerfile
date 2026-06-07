@@ -13,8 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=120 --retries=5 -r requirements.txt
 
-# Pre-download the sentence-transformers model at build time
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Pre-download the sentence-transformers model at build time.
+# MUST match the default MODEL_NAME in app/core/config.py — the multilingual
+# model is required for Turkish↔English cross-lingual comparison (the English-only
+# all-MiniLM-L6-v2 fails on Turkish syllabi; see eval/benchmark.py). Override at
+# build with --build-arg MODEL_NAME=... and set the same value via env at runtime.
+ARG MODEL_NAME=paraphrase-multilingual-MiniLM-L12-v2
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${MODEL_NAME}')"
 
 # Application code
 COPY . .

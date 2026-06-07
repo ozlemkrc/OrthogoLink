@@ -11,7 +11,7 @@ function ResultsDisplay({ data }) {
 
   if (!data) return null;
 
-  const { overall_similarity, overlap_percentage, top_courses, section_matches, report_summary, ai_summary, ai_summary_source } = data;
+  const { overall_similarity, overlap_percentage, top_courses, section_matches, ai_summary, ai_summary_source } = data;
 
   const downloadReport = async () => {
     setDownloadError(null);
@@ -230,16 +230,6 @@ function ResultsDisplay({ data }) {
         </div>
       </div>
 
-      {/* Text Report */}
-      <div className="card">
-        <div className="card-row">
-          <h2>Analysis Report</h2>
-          <button className="btn-sm btn-ghost" onClick={downloadReport} disabled={downloading}>
-            {downloading ? "Generating PDF…" : "↓ Download PDF"}
-          </button>
-        </div>
-        <div className="report">{report_summary}</div>
-      </div>
     </>
   );
 }
