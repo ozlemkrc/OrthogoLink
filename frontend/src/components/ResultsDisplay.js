@@ -234,6 +234,35 @@ function ResultsDisplay({ data }) {
   );
 }
 
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Wrap occurrences of shared keywords in <mark> so the overlapping terms are
+// visible at a glance in both the input and matched snippets.
+function highlightKeywords(text, keywords) {
+  if (!text) return null;
+  const valid = (keywords || []).filter(Boolean);
+  if (valid.length === 0) return text;
+
+  const lowerSet = new Set(valid.map((k) => k.toLowerCase()));
+  // Longest first so multi-word terms win over their substrings.
+  const pattern = valid
+    .slice()
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join("|");
+  const parts = text.split(new RegExp(`(${pattern})`, "giu"));
+
+  return parts.map((part, i) =>
+    part && lowerSet.has(part.toLowerCase()) ? (
+      <mark className="hl" key={i}>{part}</mark>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    )
+  );
+}
+
 function renderInlineMarkdown(text) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
@@ -314,21 +343,59 @@ function CourseExpandedDetails({ course, sectionMatches }) {
       )}
 
       {sectionMatches.length > 0 && (
-        <div className="course-info-block">
-          <div className="snippet-title">Section-Level Similarity ({sectionMatches.length})</div>
-          <div className="inner-table-wrap">
-            <table className="inner-table">
-              <thead>
-                <tr>
-                  <th>Your Section</th>
-                  <th>Their Section</th>
-                  <th>Similarity</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sectionMatches.map((m, i) => (
-                  <tr key={i} className={m.is_overlap ? "row-overlap" : ""}>
+        <SectionMatchTable sectionMatches={sectionMatches} />
+      )}
+
+{detail && (
+        <div className="detail-meta">
+          <span>Best section: <strong>{(detail.best_similarity * 100).toFixed(1)}%</strong></span>
+          <span>Contributing matches: <strong>{detail.match_count}</strong></span>
+          <span>Threshold: <strong>{(detail.threshold * 100).toFixed(0)}%</strong></span>
+          {detail.shared_keywords?.length > 0 && (
+            <span className="keyword-row">
+              Shared terms:
+              {detail.shared_keywords.map((kw) => (
+                <span key={kw} className="keyword-chip">{kw}</span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionMatchTable({ sectionMatches }) {
+  const [openRow, setOpenRow] = useState(null);
+
+  return (
+    <div className="course-info-block">
+      <div className="snippet-title">Section-Level Similarity ({sectionMatches.length})</div>
+      <div className="inner-table-wrap">
+        <table className="inner-table">
+          <thead>
+            <tr>
+              <th>Your Section</th>
+              <th>Their Section</th>
+              <th>Similarity</th>
+              <th>Status</th>
+              <th style={{ width: 40 }} aria-label="Expand"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sectionMatches.map((m, i) => {
+              const isOpen = openRow === i;
+              const hasSnippets = m.details && (m.details.input_snippet || m.details.matched_snippet);
+              return (
+                <React.Fragment key={i}>
+                  <tr
+                    className={[
+                      "row-selectable",
+                      m.is_overlap ? "row-overlap" : "",
+                      isOpen ? "row-selected" : "",
+                    ].filter(Boolean).join(" ")}
+                    onClick={() => setOpenRow((prev) => (prev === i ? null : i))}
+                  >
                     <td className="section-cell">{m.input_section}</td>
                     <td className="section-name-cell">{m.matched_section}</td>
                     <td>
@@ -349,28 +416,61 @@ function CourseExpandedDetails({ course, sectionMatches }) {
                         {m.is_overlap ? "OVERLAP" : "OK"}
                       </span>
                     </td>
+                    <td className="expand-cell">
+                      <span className={`expand-chevron ${isOpen ? "open" : ""}`} aria-hidden="true">▶</span>
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  {isOpen && (
+                    <tr className="detail-row">
+                      <td colSpan={5}>
+                        {hasSnippets ? (
+                          <SideBySideSnippets match={m} />
+                        ) : (
+                          <div className="results-meta">No passage text available for this match.</div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SideBySideSnippets({ match }) {
+  const keywords = match.details?.shared_keywords || [];
+  return (
+    <div className="sbs">
+      <div className="snippet-grid">
+        <div className="snippet-card">
+          <div className="snippet-title">Your syllabus · {match.input_section}</div>
+          <div className="snippet-body">
+            {highlightKeywords(match.details?.input_snippet, keywords)}
           </div>
         </div>
-      )}
-
-{detail && (
-        <div className="detail-meta">
-          <span>Best section: <strong>{(detail.best_similarity * 100).toFixed(1)}%</strong></span>
-          <span>Contributing matches: <strong>{detail.match_count}</strong></span>
-          <span>Threshold: <strong>{(detail.threshold * 100).toFixed(0)}%</strong></span>
-          {detail.shared_keywords?.length > 0 && (
-            <span className="keyword-row">
-              Shared terms:
-              {detail.shared_keywords.map((kw) => (
-                <span key={kw} className="keyword-chip">{kw}</span>
-              ))}
-            </span>
-          )}
+        <div className="snippet-card">
+          <div className="snippet-title">
+            {match.matched_course_code} · {match.matched_section}
+          </div>
+          <div className="snippet-body">
+            {highlightKeywords(match.details?.matched_snippet, keywords)}
+          </div>
         </div>
+      </div>
+      {keywords.length > 0 && (
+        <div className="keyword-row sbs-keywords">
+          <span className="sbs-keywords-label">Shared terms:</span>
+          {keywords.map((kw) => (
+            <span key={kw} className="keyword-chip">{kw}</span>
+          ))}
+        </div>
+      )}
+      {match.similarity_reason && (
+        <div className="sbs-reason">{match.similarity_reason}</div>
       )}
     </div>
   );

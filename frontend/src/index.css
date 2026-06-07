@@ -1694,6 +1694,55 @@ tbody tr.row-related {
   color: var(--text-secondary);
 }
 
+/* Shared-term highlight inside snippets */
+mark.hl {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  padding: 0 2px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] mark.hl {
+  color: var(--text-primary);
+}
+
+/* Side-by-side overlapping-passage view */
+.sbs {
+  padding: 12px;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+}
+
+.sbs .snippet-card {
+  background: var(--surface);
+}
+
+.sbs-keywords {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.sbs-keywords-label {
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.sbs-reason {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+@media (max-width: 720px) {
+  .snippet-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .contrib-list {
   list-style: none;
   padding: 0;
