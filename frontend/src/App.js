@@ -14,9 +14,9 @@ const ALL_TABS = [
   { key: "dashboard",  label: "Dashboard",               icon: "⊞", adminOnly: false },
   { key: "compare",   label: "Compare Syllabus",         icon: "⊙", adminOnly: false },
   { key: "courses",   label: "Stored Courses",           icon: "≡", adminOnly: false },
+  { key: "history",   label: "History",                  icon: "⏱", adminOnly: false },
   { key: "add",       label: "Add Course",               icon: "⊕", adminOnly: true  },
   { key: "import",    label: "Import from Universities", icon: "↓", adminOnly: true  },
-  { key: "history",   label: "History",                  icon: "⏱", adminOnly: false },
 ];
 
 function App() {
@@ -101,7 +101,7 @@ function App() {
         </div>
       </header>
 
-      <StatusBar />
+      {isAdmin && <StatusBar />}
 
       <div className="tabs-wrapper">
         <nav className="tabs" role="tablist">
@@ -121,7 +121,7 @@ function App() {
       </div>
 
       <div className="tab-content" key={activeTab}>
-        {activeTab === "dashboard" && <Dashboard />}
+        {activeTab === "dashboard" && <Dashboard onNavigate={handleTabChange} />}
 
         {activeTab === "compare" && (
           <>

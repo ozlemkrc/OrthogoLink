@@ -8,6 +8,7 @@ import {
   fetchCourse,
   updateCourse,
 } from "../api/client";
+import CourseDetailModal from "./CourseDetailModal";
 
 function CourseList({ isAdmin = false }) {
   const [courses, setCourses] = useState([]);
@@ -110,14 +111,6 @@ function CourseList({ isAdmin = false }) {
     setExpandedId(null);
     setExpandedCourse(null);
   }, []);
-
-  // Close the detail overlay on Escape while it is open.
-  useEffect(() => {
-    if (!expandedId) return;
-    const onKey = (e) => { if (e.key === "Escape") closeDetail(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [expandedId, closeDetail]);
 
   const handleEdit = (course) =>
     setEditingCourse({
@@ -336,57 +329,7 @@ function CourseList({ isAdmin = false }) {
       )}
 
       {/* Course detail overlay — opened from a card's "Details" button */}
-      {expandedId && expandedCourse && (
-        <div className="modal-overlay" onClick={closeDetail}>
-          <div
-            className="modal"
-            style={{ maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header" style={{ marginBottom: 16, alignItems: "flex-start" }}>
-              <div>
-                <span className="code">{expandedCourse.code}</span>
-                <div className="modal-title" style={{ marginTop: 6 }}>{expandedCourse.name}</div>
-              </div>
-              <button className="modal-close" onClick={closeDetail} title="Close (Esc)">✕</button>
-            </div>
-
-            <div style={{ overflowY: "auto" }}>
-              <div className="detail-label">
-                {expandedCourse.university || "Unknown University"}
-                {expandedCourse.faculty ? ` / ${expandedCourse.faculty}` : ""}
-              </div>
-              {expandedCourse.department && (
-                <div className="dept" style={{ marginBottom: 6 }}>{expandedCourse.department}</div>
-              )}
-              {expandedCourse.credits && (
-                <div className="dept" style={{ marginBottom: 12 }}>
-                  <span style={{
-                    background: "var(--primary-light)",
-                    color: "var(--primary)",
-                    padding: "1px 7px",
-                    borderRadius: 999,
-                    fontWeight: 700,
-                    fontSize: "0.75rem",
-                  }}>
-                    {expandedCourse.credits} ECTS
-                  </span>
-                </div>
-              )}
-
-              <div className="detail-label" style={{ marginTop: 10 }}>
-                Sections ({expandedCourse.sections?.length || 0})
-              </div>
-              {expandedCourse.sections?.map((sec) => (
-                <div key={sec.id} className="section-item">
-                  <strong>{sec.heading}</strong>
-                  <p style={{ whiteSpace: "pre-wrap" }}>{sec.content}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {expandedId && <CourseDetailModal course={expandedCourse} onClose={closeDetail} />}
     </>
   );
 }

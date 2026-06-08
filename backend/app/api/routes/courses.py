@@ -93,25 +93,9 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
     )
     dept_distribution = [{"department": row[0], "count": row[1]} for row in dept_result.all()]
 
-    # Recent comparisons
-    recent_result = await db.execute(
-        select(ComparisonResult)
-        .order_by(ComparisonResult.created_at.desc())
-        .limit(5)
-    )
-    # NOTE: this endpoint is public, so it deliberately omits input_text_preview
-    # (the submitted syllabus text). Per-user content is only available via the
-    # authenticated, owner-scoped /compare/history endpoints.
-    recent_comparisons = [
-        {
-            "id": c.id,
-            "overall_similarity": c.overall_similarity,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-        }
-        for c in recent_result.scalars().all()
-    ]
-
-    # Average similarity across all comparisons
+    # Average similarity across all comparisons (aggregate only — individual
+    # comparison rows are private and served exclusively by the authenticated,
+    # owner-scoped /compare/history endpoint).
     avg_sim = await db.scalar(
         select(func.avg(ComparisonResult.overall_similarity))
     )
@@ -125,7 +109,6 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         "index_vectors": index_size,
         "average_similarity": round(avg_sim, 4) if avg_sim else 0,
         "department_distribution": dept_distribution,
-        "recent_comparisons": recent_comparisons,
     }
 
 

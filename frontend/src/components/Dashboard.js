@@ -10,7 +10,7 @@ const STAT_ICONS = {
   similarity:  "〜",
 };
 
-function Dashboard() {
+function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,6 +49,21 @@ function Dashboard() {
 
   return (
     <>
+      {/* Primary call-to-action — the comparison flow is the core of the product */}
+      <div className="start-banner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <h2 style={{ marginBottom: 4 }}>⊙ Check a new course for overlap</h2>
+          <p style={{ margin: 0, color: "var(--text-secondary)" }}>
+            Paste an ECTS form or upload a syllabus PDF to see how much it overlaps with the {stats.course_count} stored course{stats.course_count !== 1 ? "s" : ""}.
+          </p>
+        </div>
+        {onNavigate && (
+          <button className="btn btn-primary" onClick={() => onNavigate("compare")} style={{ flexShrink: 0 }}>
+            Compare a Syllabus →
+          </button>
+        )}
+      </div>
+
       {/* Stats Overview */}
       <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
         <StatCard icon={STAT_ICONS.courses}     value={stats.course_count}     label="Total Courses"    className="primary" />
@@ -85,47 +100,6 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Recent Comparisons */}
-      {stats.recent_comparisons.length > 0 && (
-        <div className="card">
-          <h2>Recent Comparisons</h2>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Similarity</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.recent_comparisons.map((c) => (
-                  <tr key={c.id}>
-                    <td style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>{c.id}</td>
-                    <td>
-                      <div className="sim-bar-wrap">
-                        <span className={getSimilarityLevel(c.overall_similarity)}>
-                          {(c.overall_similarity * 100).toFixed(1)}%
-                        </span>
-                        <div className="sim-bar">
-                          <div
-                            className={`sim-bar-fill ${getSimilarityLevel(c.overall_similarity)}`}
-                            style={{ width: `${c.overall_similarity * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ fontSize: "0.78rem", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-                      {c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Getting Started Guide */}
       {stats.course_count === 0 && (
         <div className="start-banner">
@@ -145,6 +119,58 @@ function Dashboard() {
           </ol>
         </div>
       )}
+
+      {/* About / How it works — a short readme to orient new users */}
+      <div className="card">
+        <h2>ℹ️ About OrthogoLink</h2>
+        <p style={{ color: "var(--text-secondary)", lineHeight: 1.6, marginTop: 4 }}>
+          OrthogoLink is an AI-powered <strong>curriculum orthogonality checker</strong>. When a new course is
+          proposed, it compares the proposal's syllabus and ECTS content against the existing course catalogue —
+          and against other Turkish universities — to measure how much they overlap, where, and by how much.
+          The goal is to keep each course distinct and prevent curriculum bloat.
+        </p>
+
+        <div className="how-it-works" style={{ marginTop: 18 }}>
+          {[
+            {
+              icon: "⊙",
+              title: "1 · Compare a syllabus",
+              body: <>Open <strong>Compare Syllabus</strong>, paste the ECTS form text or upload a PDF, pick a similarity threshold, then run the analysis to get an overlap report against the stored catalogue.</>,
+            },
+            {
+              icon: "≡",
+              title: "2 · Browse stored courses",
+              body: <>The <strong>Stored Courses</strong> tab holds every course in the index. Use search and the university / department filters to narrow what you compare against.</>,
+            },
+            {
+              icon: "⏱",
+              title: "3 · Review past runs",
+              body: <>Every comparison you run while logged in is saved to <strong>History</strong>, so you can revisit overall similarity scores and inputs later.</>,
+            },
+            {
+              icon: "↓",
+              title: "4 · Grow the catalogue (admin)",
+              body: <>Admins can <strong>Add Course</strong> manually or <strong>Import from Universities</strong> (GTU, METU, Hacettepe, IYTE) to expand the pool the checker compares against.</>,
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid var(--border)" }}
+            >
+              <span style={{ fontSize: "1.3rem", color: "var(--primary)", lineHeight: 1.2 }}>{item.icon}</span>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 2 }}>{item.title}</div>
+                <div style={{ color: "var(--text-secondary)", fontSize: "0.9rem", lineHeight: 1.5 }}>{item.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.82rem", marginTop: 14 }}>
+          💡 Similarity is computed from semantic embeddings of the course text. A higher percentage means the
+          proposed course covers topics already taught elsewhere — review those matches before approving it.
+        </p>
+      </div>
     </>
   );
 }

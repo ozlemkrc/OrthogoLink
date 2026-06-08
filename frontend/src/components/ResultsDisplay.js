@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { downloadBlob } from "../utils/download";
 import { getPercentageLevel, getSimilarityLevel } from "../utils/similarity";
 import { fetchCourse, exportPdf } from "../api/client";
+import CourseDetailModal from "./CourseDetailModal";
 
 function ResultsDisplay({ data }) {
   const [expandedCourse, setExpandedCourse] = useState(null);
@@ -299,6 +300,7 @@ function CourseExpandedDetails({ course, sectionMatches }) {
   const [fullCourse, setFullCourse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (!course.course_id) return;
@@ -331,16 +333,24 @@ function CourseExpandedDetails({ course, sectionMatches }) {
 
       {error && <div className="error-msg" role="alert"><span>⚠</span> {error}</div>}
 
-      {fullCourse?.description && (
-        <details className="syllabus-details">
-          <summary>Course Description</summary>
-          <div className="syllabus-list">
-            <div className="syllabus-section">
-              <div className="syllabus-section-body">{fullCourse.description}</div>
-            </div>
+      {fullCourse && (fullCourse.description || fullCourse.sections?.length > 0) && (
+        <button
+          type="button"
+          className="course-desc-trigger"
+          onClick={() => setShowModal(true)}
+          title="Open full course details in an overlay"
+        >
+          <div className="course-desc-trigger-head">
+            <span className="course-desc-trigger-title">📄 Course Description</span>
+            <span className="course-desc-trigger-open">Open ↗</span>
           </div>
-        </details>
+          {fullCourse.description && (
+            <div className="course-desc-preview">{fullCourse.description}</div>
+          )}
+        </button>
       )}
+
+      {showModal && <CourseDetailModal course={fullCourse} onClose={() => setShowModal(false)} />}
 
       {sectionMatches.length > 0 && (
         <SectionMatchTable sectionMatches={sectionMatches} />

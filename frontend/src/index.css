@@ -2404,6 +2404,61 @@ mark.hl {
   line-height: 1.5;
 }
 
+/* Clickable course-description card that opens the full course overlay */
+.course-desc-trigger {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.course-desc-trigger:hover {
+  border-color: var(--primary);
+  background: var(--surface-alt);
+}
+
+.course-desc-trigger:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.course-desc-trigger-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.course-desc-trigger-title {
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--primary);
+}
+
+.course-desc-trigger-open {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.course-desc-preview {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* Compact stacked cell (used to merge course-code + university in section table) */
 .stacked-cell {
   display: flex;
