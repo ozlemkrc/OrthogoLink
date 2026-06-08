@@ -77,8 +77,14 @@ async def preview_courses(
     university_code: str,
     department_codes: Optional[List[str]] = None,
     limit: int = 5,
+    _admin: User = Depends(require_admin),
 ):
-    """Preview courses that would be imported from a university."""
+    """Preview courses that would be imported from a university.
+
+    Admin-only: this fires live outbound requests to external university sites,
+    so leaving it open would let anyone use the server to hammer those catalogs
+    (and exhaust this server's resources) without authenticating.
+    """
     scraper = UNIVERSITY_SCRAPERS.get(university_code.lower())
     if not scraper:
         raise HTTPException(status_code=404, detail=f"University '{university_code}' not found")

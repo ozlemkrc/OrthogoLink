@@ -154,8 +154,14 @@ async def get_all_courses(
     search: Optional[str] = None,
     department: Optional[str] = None,
     university: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
 ) -> list[Course]:
-    """Retrieve all courses with optional search and department filter."""
+    """Retrieve courses with optional search/filter and optional pagination.
+
+    When ``limit`` is None the full result set is returned (legacy behavior the
+    SPA relies on); pass a limit/offset to page through large catalogs.
+    """
     query = select(Course).options(selectinload(Course.sections)).order_by(Course.code)
 
     if search:
@@ -175,6 +181,11 @@ async def get_all_courses(
 
     if university:
         query = query.where(Course.university == university)
+
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
 
     result = await db.execute(query)
     return result.scalars().all()

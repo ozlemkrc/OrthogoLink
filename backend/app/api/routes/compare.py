@@ -7,6 +7,7 @@ import io
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
@@ -73,7 +74,11 @@ async def compare_text(
     except InputValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
-        result = compare_syllabus(
+        # compare_syllabus is CPU-bound (embedding inference). Run it in a worker
+        # thread so a single large request doesn't block the event loop and stall
+        # every other in-flight request.
+        result = await run_in_threadpool(
+            compare_syllabus,
             text,
             threshold_profile=request.threshold_profile,
             custom_threshold=request.custom_threshold,
@@ -111,7 +116,8 @@ async def compare_pdf(
         except InputValidationError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        extracted = extract_text_from_pdf(contents)
+        # PDF parsing is blocking I/O/CPU — offload it too.
+        extracted = await run_in_threadpool(extract_text_from_pdf, contents)
         try:
             # Allow a low floor here (a near-empty PDF should fail clearly) while
             # still enforcing the upper bound on extracted text.
@@ -119,7 +125,8 @@ async def compare_pdf(
         except InputValidationError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        result = compare_syllabus(
+        result = await run_in_threadpool(
+            compare_syllabus,
             text,
             threshold_profile=threshold_profile,
             custom_threshold=custom_threshold,
@@ -155,7 +162,8 @@ async def compare_cross_university(
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        result = compare_syllabus(
+        result = await run_in_threadpool(
+            compare_syllabus,
             text,
             university_filter=request.university_filter,
             department_filter=request.department_filter,
@@ -244,7 +252,9 @@ async def export_csv(request: CompareTextRequest):
     if len(request.text.strip()) < 50:
         raise HTTPException(status_code=400, detail="Input text is too short.")
 
-    result = compare_syllabus(request.text, threshold_profile=request.threshold_profile)
+    result = await run_in_threadpool(
+        compare_syllabus, request.text, threshold_profile=request.threshold_profile
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -304,11 +314,24 @@ async def export_csv(request: CompareTextRequest):
     )
 
 
+# Upper bounds for the client-supplied result rendered by /export-pdf. The
+# endpoint is public and reportlab rendering is O(rows), so a pathologically
+# large payload (within nginx's 20 MB body cap) could still burn CPU/memory.
+# A real comparison never approaches these counts.
+_MAX_PDF_TOP_COURSES = 100
+_MAX_PDF_SECTION_MATCHES = 1000
+
+
 @router.post("/export-pdf")
 async def export_pdf(result: ComparisonResponse):
     """Render the comparison result the user is viewing as a detailed PDF report."""
+    if (
+        len(result.top_courses) > _MAX_PDF_TOP_COURSES
+        or len(result.section_matches) > _MAX_PDF_SECTION_MATCHES
+    ):
+        raise HTTPException(status_code=400, detail="Report payload is too large to render.")
     try:
-        pdf_bytes = generate_report_pdf(result)
+        pdf_bytes = await run_in_threadpool(generate_report_pdf, result)
     except Exception as e:
         logger.error("PDF report generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Could not generate PDF report.")

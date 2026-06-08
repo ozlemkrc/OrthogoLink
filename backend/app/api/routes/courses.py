@@ -2,6 +2,7 @@
 Course management API routes (Admin-side).
 Includes CRUD, search, filtering, and dashboard statistics.
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, distinct
@@ -13,6 +14,7 @@ from app.models.course import Course, CourseSection, ComparisonResult, User
 from app.models.schemas import CourseCreate, CourseUpdate, CourseOut, CourseListOut
 from app.services import course_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
 
@@ -27,8 +29,11 @@ async def create_course(
         course = await course_service.create_course(db, data)
         course = await course_service.get_course_by_id(db, course.id)
         return course
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        # Log the full error server-side; return a generic message so internal
+        # details (SQL, stack context) never reach the client.
+        logger.error("Course creation failed", exc_info=True)
+        raise HTTPException(status_code=400, detail="Could not create course.")
 
 
 @router.get("/", response_model=list[CourseListOut])
@@ -37,13 +42,17 @@ async def list_courses(
     search: Optional[str] = Query(None, description="Search by code, name, or department"),
     department: Optional[str] = Query(None, description="Filter by department"),
     university: Optional[str] = Query(None, description="Filter by university"),
+    limit: Optional[int] = Query(None, ge=1, le=500, description="Max courses to return (omit for all)"),
+    offset: int = Query(0, ge=0, description="Number of courses to skip (pagination)"),
 ):
-    """List all stored courses with optional search and filtering."""
+    """List stored courses with optional search, filtering, and pagination."""
     courses = await course_service.get_all_courses(
         db,
         search=search,
         department=department,
         university=university,
+        limit=limit,
+        offset=offset,
     )
     return courses
 

@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     RERANK_CANDIDATES: int = 30   # bi-encoder candidates re-scored per input section
     RERANK_WEIGHT: float = 0.5    # blend: final = (1-w)*cosine + w*cross_encoder
 
+    # Scraper TLS verification. Default on (verify certs) so scraped catalog data
+    # can't be silently MITM'd. Some Turkish .edu.tr sites ship broken cert chains;
+    # if a specific university's import starts failing with SSL errors, set this to
+    # false to fall back to unverified connections for the scrapers only.
+    SCRAPER_VERIFY_SSL: bool = True
+
     # Input limits — guard against oversized payloads that would blow up memory
     # or stall the embedding step. Tunable via env for larger syllabi.
     MIN_INPUT_CHARS: int = 50            # below this, input is not meaningful

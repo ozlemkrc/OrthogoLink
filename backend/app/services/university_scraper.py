@@ -15,7 +15,21 @@ from bs4 import BeautifulSoup
 import aiohttp
 from aiohttp import ClientTimeout
 
+from app.core.config import get_settings
+
 logger = logging.getLogger(__name__)
+
+
+def _make_connector() -> aiohttp.TCPConnector:
+    """Build a TCP connector honoring SCRAPER_VERIFY_SSL.
+
+    Default verifies certificates; set SCRAPER_VERIFY_SSL=false to disable for
+    university sites with broken cert chains. Disabling exposes scraped data to
+    MITM, so it is opt-in rather than the baseline.
+    """
+    if get_settings().SCRAPER_VERIFY_SSL:
+        return aiohttp.TCPConnector()
+    return aiohttp.TCPConnector(ssl=False)
 
 
 class UniversityScraper:
@@ -172,7 +186,7 @@ class OIBSBolognaScraper(UniversityScraper):
             return []
 
         catalog_url = f"{self.BASE_URL}/progCourses.aspx?lang=tr&curSunit={prog['sunit']}"
-        connector = aiohttp.TCPConnector(ssl=False)
+        connector = _make_connector()
 
         async with aiohttp.ClientSession(
             timeout=self.timeout, headers=self.headers, connector=connector
@@ -623,7 +637,7 @@ class METUScraper(UniversityScraper):
             entries = entries[:limit]
 
         semaphore = asyncio.Semaphore(self.CONCURRENCY)
-        connector = aiohttp.TCPConnector(ssl=False)
+        connector = _make_connector()
         async with aiohttp.ClientSession(
             timeout=self.timeout, headers=self.headers, connector=connector
         ) as session:
@@ -907,7 +921,7 @@ class IYTEScraper(UniversityScraper):
         logger.info(f"IYTE CENG: fetching {len(links)} detail pages")
 
         semaphore = asyncio.Semaphore(self.CONCURRENCY)
-        connector = aiohttp.TCPConnector(ssl=False)
+        connector = _make_connector()
         async with aiohttp.ClientSession(
             timeout=self.timeout, headers=self.headers, connector=connector
         ) as session:
@@ -1235,7 +1249,7 @@ class YTUScraper(UniversityScraper):
             entries = entries[:limit]
 
         semaphore = asyncio.Semaphore(self.CONCURRENCY)
-        connector = aiohttp.TCPConnector(ssl=False)
+        connector = _make_connector()
         async with aiohttp.ClientSession(
             timeout=self.timeout, headers=self.headers, connector=connector
         ) as session:
@@ -1540,7 +1554,7 @@ class MarmaraScraper(UniversityScraper):
             entries = entries[:limit]
 
         semaphore = asyncio.Semaphore(self.CONCURRENCY)
-        connector = aiohttp.TCPConnector(ssl=False)
+        connector = _make_connector()
         async with aiohttp.ClientSession(
             timeout=self.timeout, headers=self.headers, connector=connector
         ) as session:
