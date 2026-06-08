@@ -90,10 +90,12 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         .order_by(ComparisonResult.created_at.desc())
         .limit(5)
     )
+    # NOTE: this endpoint is public, so it deliberately omits input_text_preview
+    # (the submitted syllabus text). Per-user content is only available via the
+    # authenticated, owner-scoped /compare/history endpoints.
     recent_comparisons = [
         {
             "id": c.id,
-            "input_preview": c.input_text_preview[:100] if c.input_text_preview else "",
             "overall_similarity": c.overall_similarity,
             "created_at": c.created_at.isoformat() if c.created_at else None,
         }

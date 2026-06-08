@@ -76,6 +76,11 @@ class ComparisonResult(Base):
     __tablename__ = "comparison_results"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Owner of this comparison. Nullable because anonymous (unauthenticated)
+    # comparisons are still allowed; those rows simply never surface in any
+    # user's history. SET NULL on delete so removing a user keeps the aggregate
+    # dashboard stats intact.
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     input_text_preview = Column(String(500), nullable=True)
     overall_similarity = Column(Float, nullable=False)
     report_summary = Column(Text, nullable=True)

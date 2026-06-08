@@ -16,7 +16,7 @@ from app.services.course_service import (
     ensure_pgvector_ready,
     index_vector_count,
 )
-from app.models.course import Course, CourseSection
+from app.models.course import Course, CourseSection, User
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +46,40 @@ async def seed_database():
             await create_course(db, data)
         await db.commit()
         logger.info("Database seeding complete")
+
+
+async def seed_admin():
+    """Provision the admin user from ADMIN_USERNAME / ADMIN_PASSWORD if configured.
+
+    Idempotent: if the user already exists it is left untouched (we never silently
+    reset a password), only promoting it to admin if somehow it is not. This is the
+    supported way to create an admin — registration does not grant admin in
+    production, so without this a fresh deployment has no privileged account.
+    """
+    username = settings.ADMIN_USERNAME.strip()
+    password = settings.ADMIN_PASSWORD
+    if not username or not password:
+        return
+
+    from app.core.security import hash_password
+
+    async with async_session() as db:
+        existing = await db.execute(select(User).where(User.username == username))
+        user = existing.scalar_one_or_none()
+        if user:
+            if user.role != "admin":
+                user.role = "admin"
+                await db.commit()
+                logger.info("Promoted existing user '%s' to admin", username)
+            return
+        db.add(User(
+            username=username,
+            password_hash=hash_password(password),
+            full_name=username,
+            role="admin",
+        ))
+        await db.commit()
+        logger.info("Seeded admin user '%s' from environment", username)
 
 
 @asynccontextmanager
@@ -92,6 +126,8 @@ async def lifespan(app: FastAPI):
         async with async_session() as db:
             await ensure_pgvector_ready(db)
 
+    await seed_admin()
+
     logger.info("Application ready (search backend: %s)", settings.SEARCH_BACKEND)
     yield
 
@@ -124,7 +160,20 @@ if settings.RATE_LIMIT_ENABLED:
     from slowapi.middleware import SlowAPIMiddleware
     from slowapi.util import get_remote_address
 
-    limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT])
+    def _client_key(request):
+        # Behind nginx/CapRover, request.client.host is the proxy IP — identical
+        # for every visitor. Prefer the original client from X-Forwarded-For so
+        # the limit is genuinely per-client. The proxy appends its own hop to the
+        # right, so the leftmost entry is the original caller.
+        if settings.RATE_LIMIT_TRUSTED_PROXY:
+            forwarded = request.headers.get("X-Forwarded-For")
+            if forwarded:
+                client = forwarded.split(",")[0].strip()
+                if client:
+                    return client
+        return get_remote_address(request)
+
+    limiter = Limiter(key_func=_client_key, default_limits=[settings.RATE_LIMIT])
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import (
     hash_password,
@@ -17,6 +18,7 @@ from app.core.security import (
 from app.models.course import User
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -58,9 +60,12 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already taken")
 
-    # First registered user becomes admin; rest are regular users.
+    # Admin is provisioned from the environment at startup (see seed_admin), never
+    # granted through this public endpoint in production — otherwise the first
+    # caller on a fresh deployment could claim admin. As a local convenience, the
+    # very first user of a DEBUG run is bootstrapped as admin.
     user_count = await db.scalar(select(func.count()).select_from(User)) or 0
-    role = "admin" if user_count == 0 else "user"
+    role = "admin" if (settings.DEBUG and user_count == 0) else "user"
 
     user = User(
         username=req.username,

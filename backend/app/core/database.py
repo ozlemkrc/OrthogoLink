@@ -66,6 +66,7 @@ async def init_db():
         await _migrate_course_composite_uniqueness(conn)
         await _backfill_course_source_columns(conn)
         await _migrate_user_role(conn)
+        await _migrate_comparison_user_id(conn)
         if pgvector:
             await _migrate_pgvector(conn)
             await _backfill_embedding_vectors(conn)
@@ -149,6 +150,14 @@ AMBIGUOUS_PREFIX_MAP = {
 
 async def _migrate_user_role(conn):
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'"))
+
+
+async def _migrate_comparison_user_id(conn):
+    """Add the per-user owner column so history can be scoped to its creator."""
+    await conn.execute(text(
+        "ALTER TABLE comparison_results ADD COLUMN IF NOT EXISTS "
+        "user_id INTEGER REFERENCES users(id) ON DELETE SET NULL"
+    ))
 
 
 async def _migrate_course_source_columns(conn):

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.config import get_settings
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_optional_user
 from app.models.course import Course, ComparisonResult, SectionMatch, User
 from app.models.schemas import CompareTextRequest, ComparisonResponse
 from app.services.comparison_service import compare_syllabus
@@ -62,7 +62,11 @@ class CrossUniCompareRequest(BaseModel):
 
 
 @router.post("/text", response_model=ComparisonResponse)
-async def compare_text(request: CompareTextRequest, db: AsyncSession = Depends(get_db)):
+async def compare_text(
+    request: CompareTextRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
     """Compare pasted syllabus text against stored courses."""
     try:
         text = validate_syllabus_text(request.text)
@@ -77,7 +81,7 @@ async def compare_text(request: CompareTextRequest, db: AsyncSession = Depends(g
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
             await _add_ai_summary(result, lang)
-        await _save_comparison(db, text, result)
+        await _save_comparison(db, text, result, current_user)
         return result
     except Exception as e:
         logger.error("Text comparison failed: %s", e, exc_info=True)
@@ -94,6 +98,7 @@ async def compare_pdf(
     university_filter: Optional[List[str]] = Query(None),
     department_filter: Optional[List[str]] = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Upload a PDF syllabus and compare against stored courses."""
     if not file.filename.lower().endswith(".pdf"):
@@ -125,7 +130,7 @@ async def compare_pdf(
             lang = explanation_language or _settings.AI_DEFAULT_LANGUAGE
             is_cross = bool(university_filter or department_filter)
             await _add_ai_summary(result, lang, is_cross_university=is_cross)
-        await _save_comparison(db, text, result)
+        await _save_comparison(db, text, result, current_user)
         return result
     except HTTPException:
         raise
@@ -135,7 +140,11 @@ async def compare_pdf(
 
 
 @router.post("/cross-university", response_model=ComparisonResponse)
-async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSession = Depends(get_db)):
+async def compare_cross_university(
+    request: CrossUniCompareRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
     """
     Compare syllabus against courses from specific universities.
     Filter by university code prefixes (e.g., BLM for GTU, CENG for METU/IYTE).
@@ -156,7 +165,7 @@ async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSes
         if request.include_ai_explanations:
             lang = request.explanation_language or _settings.AI_DEFAULT_LANGUAGE
             await _add_ai_summary(result, lang, is_cross_university=True)
-        await _save_comparison(db, text, result)
+        await _save_comparison(db, text, result, current_user)
         return result
     except Exception as e:
         logger.error("Cross-university comparison failed: %s", e, exc_info=True)
@@ -167,11 +176,12 @@ async def compare_cross_university(request: CrossUniCompareRequest, db: AsyncSes
 async def get_comparison_history(
     db: AsyncSession = Depends(get_db),
     limit: int = 20,
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Get recent comparison history. Requires authentication."""
+    """Get the authenticated user's own recent comparison history."""
     result = await db.execute(
         select(ComparisonResult)
+        .where(ComparisonResult.user_id == user.id)
         .order_by(ComparisonResult.created_at.desc())
         .limit(limit)
     )
@@ -191,14 +201,19 @@ async def get_comparison_history(
 async def get_comparison_detail(
     comparison_id: int,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Get detailed comparison result by ID. Requires authentication."""
+    """Get one of the authenticated user's own comparison results by ID."""
     from sqlalchemy.orm import selectinload
+    # Scope by owner so IDs belonging to other users 404 rather than leak
+    # (prevents enumerating every comparison in the system).
     result = await db.execute(
         select(ComparisonResult)
         .options(selectinload(ComparisonResult.matches))
-        .where(ComparisonResult.id == comparison_id)
+        .where(
+            ComparisonResult.id == comparison_id,
+            ComparisonResult.user_id == user.id,
+        )
     )
     comp = result.scalar_one_or_none()
     if not comp:
@@ -305,10 +320,20 @@ async def export_pdf(result: ComparisonResponse):
     )
 
 
-async def _save_comparison(db: AsyncSession, text: str, result: ComparisonResponse):
-    """Save comparison result to database for history tracking."""
+async def _save_comparison(
+    db: AsyncSession,
+    text: str,
+    result: ComparisonResponse,
+    user: Optional[User] = None,
+):
+    """Save comparison result to database for history tracking.
+
+    Attributed to ``user`` when the request was authenticated; anonymous
+    comparisons are stored with no owner and never appear in anyone's history.
+    """
     try:
         comp = ComparisonResult(
+            user_id=user.id if user else None,
             input_text_preview=text[:500],
             overall_similarity=result.overall_similarity,
             report_summary=result.report_summary,

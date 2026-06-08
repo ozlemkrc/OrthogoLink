@@ -55,10 +55,22 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "orthogolink-dev-key-do-not-use-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
+    # Admin bootstrap. When both are set, an admin user is provisioned at startup.
+    # This is the ONLY way to get an admin in production: the public /auth/register
+    # endpoint never grants admin (outside a local DEBUG run), so there is no
+    # "first request wins admin" race on a fresh deployment.
+    ADMIN_USERNAME: str = ""
+    ADMIN_PASSWORD: str = ""
+
     # API rate limiting (per client IP). Protects the public endpoints — the
     # /compare routes run embeddings on user input and are the most abusable.
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT: str = "60/minute"
+    # Behind a reverse proxy (nginx/CapRover) the direct socket peer is always the
+    # proxy, which would collapse every client into a single rate-limit bucket.
+    # When true, derive the client IP from the leftmost X-Forwarded-For entry.
+    # Only safe when the app is actually behind a trusted proxy that sets XFF.
+    RATE_LIMIT_TRUSTED_PROXY: bool = True
 
     # AI Explanations
     AI_EXPLANATIONS_ENABLED: bool = False

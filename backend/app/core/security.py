@@ -73,6 +73,28 @@ async def get_current_user(
     return user
 
 
+async def get_optional_user(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Resolve the current user if a valid token is present, else None.
+
+    Unlike :func:`get_current_user` this never raises — it lets a route stay
+    publicly accessible while still attributing the request to a user when one
+    is logged in (used to tag comparisons with their owner).
+    """
+    if not token:
+        return None
+    payload = decode_token(token)
+    if not payload:
+        return None
+    username = payload.get("sub")
+    if not username:
+        return None
+    result = await db.execute(select(User).where(User.username == username))
+    return result.scalar_one_or_none()
+
+
 async def require_admin(user: User = Depends(get_current_user)) -> User:
     if (user.role or "user") != "admin":
         raise HTTPException(

@@ -94,7 +94,6 @@ function Dashboard() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Input Preview</th>
                   <th>Similarity</th>
                   <th>Date</th>
                 </tr>
@@ -103,9 +102,6 @@ function Dashboard() {
                 {stats.recent_comparisons.map((c) => (
                   <tr key={c.id}>
                     <td style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>{c.id}</td>
-                    <td style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {c.input_preview}
-                    </td>
                     <td>
                       <div className="sim-bar-wrap">
                         <span className={getSimilarityLevel(c.overall_similarity)}>
