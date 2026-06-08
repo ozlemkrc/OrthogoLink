@@ -22,6 +22,7 @@ function CourseList({ isAdmin = false }) {
   const [expandedId, setExpandedId] = useState(null);
   const [expandedCourse, setExpandedCourse] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const loadCourses = useCallback(async () => {
@@ -39,6 +40,7 @@ function CourseList({ isAdmin = false }) {
   useEffect(() => {
     loadCourses();
     setSelectedIds(new Set());
+    setSelectionMode(false);
   }, [loadCourses]);
 
   useEffect(() => {
@@ -63,6 +65,18 @@ function CourseList({ isAdmin = false }) {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  // Clicking a card (admin only) enters selection mode and toggles that card.
+  const handleCardClick = (course) => {
+    if (!isAdmin || editingCourse?.id === course.id) return;
+    setSelectionMode(true);
+    toggleSelect(course.id);
+  };
+
+  const exitSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
 
   const toggleSelectAll = () =>
     setSelectedIds(
@@ -176,8 +190,8 @@ function CourseList({ isAdmin = false }) {
         </div>
       </div>
 
-      {/* Bulk actions */}
-      {isAdmin && courses.length > 0 && (
+      {/* Bulk actions — only shown once a card has been clicked (selection mode) */}
+      {isAdmin && selectionMode && courses.length > 0 && (
         <div className="card" style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 18px" }}>
           <input
             type="checkbox"
@@ -200,6 +214,9 @@ function CourseList({ isAdmin = false }) {
               {bulkDeleting ? "Deleting…" : `✕ Delete ${selectedIds.size}`}
             </button>
           )}
+          <button className="btn-sm btn-ghost" style={{ marginLeft: "auto" }} onClick={exitSelection}>
+            Done
+          </button>
         </div>
       )}
 
@@ -227,7 +244,17 @@ function CourseList({ isAdmin = false }) {
       ) : (
         <div className="course-grid">
           {courses.map((course) => (
-            <div className="course-card" key={course.id}>
+            <div
+              className="course-card"
+              key={course.id}
+              onClick={() => handleCardClick(course)}
+              style={{
+                cursor: isAdmin && editingCourse?.id !== course.id ? "pointer" : "default",
+                ...(selectionMode && selectedIds.has(course.id)
+                  ? { borderColor: "var(--primary)", boxShadow: "0 0 0 1px var(--primary)" }
+                  : {}),
+              }}
+            >
               {editingCourse?.id === course.id ? (
                 <EditForm
                   form={editingCourse}
@@ -239,7 +266,7 @@ function CourseList({ isAdmin = false }) {
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {isAdmin && (
+                      {isAdmin && selectionMode && (
                         <input
                           type="checkbox"
                           checked={selectedIds.has(course.id)}
@@ -251,16 +278,25 @@ function CourseList({ isAdmin = false }) {
                       <span className="code">{course.code}</span>
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button className="btn-sm btn-ghost" onClick={() => openDetail(course.id)} title="View details">
+                      <button
+                        className="btn-sm btn-ghost"
+                        onClick={(e) => { e.stopPropagation(); openDetail(course.id); }}
+                        title="View details"
+                      >
                         Details
                       </button>
-                      {isAdmin && (
+                      {isAdmin && selectionMode && (
                         <>
-                          <button className="btn-sm btn-ghost" onClick={() => handleEdit(course)}>✎</button>
+                          <button
+                            className="btn-sm btn-ghost"
+                            onClick={(e) => { e.stopPropagation(); handleEdit(course); }}
+                          >
+                            ✎
+                          </button>
                           <button
                             className="btn-sm btn-ghost"
                             style={{ color: "var(--danger)", borderColor: "transparent" }}
-                            onClick={() => handleDelete(course.id, course.code)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(course.id, course.code); }}
                           >
                             ✕
                           </button>
