@@ -1,6 +1,6 @@
 """
 Comparison service v2: section-aware, deduped, threshold-profile aware.
-Takes input text -> splits -> embeds -> FAISS search -> dedup -> aggregate -> report.
+Takes input text -> splits -> embeds -> vector search -> dedup -> aggregate -> report.
 """
 import logging
 import re
@@ -290,10 +290,11 @@ def _detect_language(text: str) -> str:
 def _search(query_embedding, top_k: int) -> list[dict]:
     """Dispatch a similarity search to the configured backend.
 
-    pgvector queries the shared PostgreSQL store (multi-worker safe); faiss uses
-    the legacy in-process index (single worker; also used by eval/benchmark.py).
+    pgvector queries the shared PostgreSQL store (the production backend, multi-
+    worker safe); memory uses the in-process numpy index, which has no database
+    and exists only for the standalone eval/benchmark.py.
     """
-    if settings.SEARCH_BACKEND == "faiss":
+    if settings.SEARCH_BACKEND == "memory":
         return embedding_service.search(query_embedding, top_k=top_k)
     from app.services.vector_search import search_sections
     return search_sections(query_embedding, top_k=top_k)

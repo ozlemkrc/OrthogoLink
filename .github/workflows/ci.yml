@@ -19,7 +19,7 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      # The unit tests stub the heavy deps (faiss, sentence-transformers, PyPDF2,
+      # The unit tests stub the heavy deps (sentence-transformers, PyPDF2,
       # sqlalchemy is lazily imported), so only these light libraries are needed.
       # This keeps CI fast (no torch download) while still running the real tests.
       - name: Install test dependencies

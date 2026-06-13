@@ -50,7 +50,7 @@ function CourseList({ isAdmin = false }) {
   }, []);
 
   const handleDelete = async (id, code) => {
-    if (!window.confirm(`Delete course ${code}? This will rebuild the FAISS index.`)) return;
+    if (!window.confirm(`Delete course ${code}?`)) return;
     try {
       setError("");
       await deleteCourse(id);
@@ -86,7 +86,7 @@ function CourseList({ isAdmin = false }) {
 
   const handleBulkDelete = async () => {
     if (!selectedIds.size) return;
-    if (!window.confirm(`Delete ${selectedIds.size} selected course(s)? This will rebuild the FAISS index.`)) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected course(s)?`)) return;
     setBulkDeleting(true);
     try {
       setError("");

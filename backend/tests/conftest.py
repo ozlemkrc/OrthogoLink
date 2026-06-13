@@ -3,12 +3,12 @@ Shared pytest configuration.
 
 The deterministic-logic unit tests (``test_comparison_service.py``,
 ``test_pdf_service.py``) exercise pure functions that do **not** need the
-embedding model, FAISS, or PDF parsing at runtime — those heavy dependencies
-are only imported at module load time. To keep the unit tests fast and runnable
-on any machine (no ~90MB model download, no faiss-cpu build), we register
-lightweight stub modules in ``sys.modules`` *before* the app packages are
-imported. The real dependencies are still used by the evaluation harness
-(``eval/benchmark.py``), which runs against the actual model.
+embedding model or PDF parsing at runtime — those heavy dependencies are only
+imported at module load time. To keep the unit tests fast and runnable on any
+machine (no ~90MB model download), we register lightweight stub modules in
+``sys.modules`` *before* the app packages are imported. The real dependencies
+are still used by the evaluation harness (``eval/benchmark.py``), which runs
+against the actual model.
 """
 import os
 import sys
@@ -33,17 +33,7 @@ def _install_stub(name: str, attrs: dict | None = None) -> types.ModuleType:
 
 
 def _ensure_heavy_stubs() -> None:
-    """Stub faiss / sentence_transformers / PyPDF2 only if not installed."""
-    try:
-        import faiss  # noqa: F401
-    except ImportError:
-        _install_stub("faiss", {
-            "IndexFlatIP": object,
-            "normalize_L2": lambda *a, **k: None,
-            "write_index": lambda *a, **k: None,
-            "read_index": lambda *a, **k: None,
-        })
-
+    """Stub sentence_transformers / PyPDF2 only if not installed."""
     try:
         import sentence_transformers  # noqa: F401
     except ImportError:

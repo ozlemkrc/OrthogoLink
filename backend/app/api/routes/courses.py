@@ -24,7 +24,7 @@ async def create_course(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Create a new course, generate embeddings, and add to FAISS index."""
+    """Create a new course, generate embeddings, and store its section vectors."""
     try:
         course = await course_service.create_course(db, data)
         course = await course_service.get_course_by_id(db, course.id)
@@ -141,11 +141,10 @@ async def delete_course(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Delete a course and rebuild FAISS index."""
+    """Delete a course. Its section vectors are removed via FK cascade."""
     deleted = await course_service.delete_course(db, course_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Course not found")
-    await course_service.rebuild_faiss_index(db)
 
 
 class BulkDeleteRequest(BaseModel):
@@ -158,21 +157,10 @@ async def bulk_delete_courses(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    """Delete multiple courses by ID and rebuild FAISS index once."""
+    """Delete multiple courses by ID."""
     deleted_count = 0
     for course_id in body.ids:
         if await course_service.delete_course(db, course_id):
             deleted_count += 1
     await db.commit()
-    await course_service.rebuild_faiss_index(db)
     return {"deleted": deleted_count}
-
-
-@router.post("/rebuild-index", status_code=status.HTTP_200_OK)
-async def rebuild_index(
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    """Manually rebuild the FAISS index from stored embeddings."""
-    await course_service.rebuild_faiss_index(db)
-    return {"message": "FAISS index rebuilt successfully"}

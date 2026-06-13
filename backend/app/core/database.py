@@ -79,7 +79,7 @@ async def _migrate_pgvector(conn):
         text(f"ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS embedding_vec vector({dim})")
     )
     # Singleton table marking which embedding model the stored vectors were built
-    # with — mirrors the FAISS meta check so a model change triggers a re-embed.
+    # with, so a model change triggers a re-embed of all sections on startup.
     await conn.execute(text(
         "CREATE TABLE IF NOT EXISTS embedding_meta ("
         " id INTEGER PRIMARY KEY DEFAULT 1,"

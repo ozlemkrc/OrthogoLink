@@ -49,13 +49,10 @@ class Settings(BaseSettings):
     #   "pgvector" — embeddings searched in PostgreSQL via the pgvector extension.
     #                Shared across processes, so the API can run with MULTIPLE
     #                uvicorn workers and survives restarts. (default, production)
-    #   "faiss"    — legacy in-process FAISS index. Requires a SINGLE worker.
-    #                Also the backend the standalone eval/benchmark.py uses.
+    #   "memory"   — in-process numpy index, no database. Used only by the
+    #                standalone eval/benchmark.py; not a deployment option.
     SEARCH_BACKEND: str = "pgvector"
     EMBEDDING_DIM: int = 384  # dimension of MODEL_NAME's output; pgvector column size
-
-    # FAISS index path (only used when SEARCH_BACKEND="faiss")
-    FAISS_INDEX_PATH: str = "/app/data/faiss_index"
 
     # Auth — must be set via .env in any real deployment
     SECRET_KEY: str = "orthogolink-dev-key-do-not-use-in-production"

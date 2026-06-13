@@ -11,8 +11,6 @@ from app.core.database import init_db, async_session
 from app.api.routes import courses, compare, import_courses, auth
 from app.services.embedding_service import embedding_service
 from app.services.course_service import (
-    rebuild_faiss_index,
-    reembed_all_sections,
     ensure_pgvector_ready,
     index_vector_count,
 )
@@ -107,24 +105,12 @@ async def lifespan(app: FastAPI):
     # backfills section vectors from any legacy binary embeddings).
     await init_db()
 
-    if settings.SEARCH_BACKEND == "faiss":
-        # Try to load the persisted FAISS index. load_index() returns False if the
-        # index is missing OR the saved model name no longer matches (stale after a
-        # model upgrade) — in which case re-embed everything.
-        if not embedding_service.load_index():
-            async with async_session() as db:
-                await reembed_all_sections(db)
-        await seed_database()
-        # Sync FAISS metadata with latest DB columns (source university/faculty).
-        async with async_session() as db:
-            await rebuild_faiss_index(db)
-    else:
-        # pgvector: search reads the shared DB, so there is no in-process index to
-        # load or rebuild. Seed first, then reconcile the model marker (re-embeds
-        # only if the configured model changed).
-        await seed_database()
-        async with async_session() as db:
-            await ensure_pgvector_ready(db)
+    # pgvector: search reads the shared DB, so there is no in-process index to
+    # load or rebuild. Seed first, then reconcile the model marker (re-embeds
+    # only if the configured embedding model changed).
+    await seed_database()
+    async with async_session() as db:
+        await ensure_pgvector_ready(db)
 
     await seed_admin()
 
@@ -132,7 +118,6 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    embedding_service.save_index()
     logger.info("Application shutdown")
 
 
