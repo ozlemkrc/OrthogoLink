@@ -1,11 +1,10 @@
 """
 pgvector-backed similarity search.
 
-This is the production search backend (``SEARCH_BACKEND="pgvector"``). Unlike the
-in-process FAISS index, it queries embeddings stored in PostgreSQL, so the result
-set is shared across processes — the API can run with multiple uvicorn workers and
-search results reflect runtime course add/update/delete/import immediately, with no
-in-memory index to keep in sync.
+This is the production search backend (``SEARCH_BACKEND="pgvector"``). It queries
+embeddings stored in PostgreSQL, so the result set is shared across processes — the
+API can run with multiple uvicorn workers and search results reflect runtime course
+add/update/delete/import immediately, with no in-memory index to keep in sync.
 
 The query vector is rendered as a plain numeric literal (``'[...]'::vector``) rather
 than a bound parameter. The values come straight from the embedding model (floats),

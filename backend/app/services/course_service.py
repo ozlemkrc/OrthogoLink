@@ -1,7 +1,6 @@
 """
 Course service: CRUD operations, search, and embedding generation for stored courses.
 """
-import numpy as np
 import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +15,6 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-
-def _use_faiss() -> bool:
-    """True when the legacy in-process FAISS backend is active (single-worker)."""
-    return settings.SEARCH_BACKEND == "faiss"
 
 
 async def _store_section_vectors(db: AsyncSession, pairs: list[tuple]) -> None:
@@ -61,7 +55,6 @@ async def create_course(db: AsyncSession, data: CourseCreate) -> Course:
     embeddings = embedding_service.encode(texts)
 
     section_pairs: list[tuple] = []
-    metadata_list = []
     for i, section in enumerate(sections):
         sec = CourseSection(
             course_id=course.id,
@@ -71,24 +64,10 @@ async def create_course(db: AsyncSession, data: CourseCreate) -> Course:
         )
         db.add(sec)
         section_pairs.append((sec, embeddings[i]))
-        metadata_list.append({
-            "course_id": course.id,
-            "course_code": course.code,
-            "course_name": course.name,
-            "university": course.university or "",
-            "faculty": course.faculty or "",
-            "section_heading": section["heading"],
-            "section_content": section["content"],
-            "department": data.department or "",
-        })
 
     await db.flush()  # assign section ids before writing vectors
 
-    if _use_faiss():
-        embedding_service.add_to_index(embeddings, metadata_list)
-        embedding_service.save_index()
-    else:
-        await _store_section_vectors(db, section_pairs)
+    await _store_section_vectors(db, section_pairs)
 
     logger.info(f"Course {course.code} created with {len(sections)} sections")
     return course
@@ -138,12 +117,8 @@ async def update_course(db: AsyncSession, course_id: int, data: CourseUpdate) ->
             section_pairs.append((sec, embeddings[i]))
 
         await db.flush()
-        if _use_faiss():
-            # Rebuild FAISS index to reflect changes (no in-place delete in FAISS).
-            await rebuild_faiss_index(db)
-        else:
-            # pgvector: deleted sections are gone via cascade; just write new vectors.
-            await _store_section_vectors(db, section_pairs)
+        # Deleted sections are gone via cascade; just write the new vectors.
+        await _store_section_vectors(db, section_pairs)
 
     await db.flush()
     return await get_course_by_id(db, course_id)
@@ -200,7 +175,7 @@ async def get_course_by_id(db: AsyncSession, course_id: int) -> Course | None:
 
 
 async def delete_course(db: AsyncSession, course_id: int) -> bool:
-    """Delete a course. Note: requires FAISS index rebuild."""
+    """Delete a course. Its section vectors are removed via FK cascade."""
     course = await get_course_by_id(db, course_id)
     if not course:
         return False
@@ -212,8 +187,8 @@ async def delete_course(db: AsyncSession, course_id: int) -> bool:
 async def reembed_all_sections(db: AsyncSession):
     """
     Re-encode every course section from its stored text using the current model
-    and update both the binary embedding and the pgvector column (or the FAISS
-    index, depending on backend). Called when the embedding model has changed.
+    and update both the binary embedding and the pgvector search column. Called
+    when the configured embedding model has changed.
     """
     result = await db.execute(
         select(CourseSection).options(selectinload(CourseSection.course))
@@ -221,10 +196,6 @@ async def reembed_all_sections(db: AsyncSession):
     sections = result.scalars().all()
 
     if not sections:
-        if _use_faiss():
-            embedding_service.index = None
-            embedding_service.id_map = []
-            embedding_service.save_index()
         logger.info("No sections to re-embed")
         return
 
@@ -235,35 +206,20 @@ async def reembed_all_sections(db: AsyncSession):
     logger.info(f"Re-embedding {len(texts)} sections with model '{settings.MODEL_NAME}'...")
     emb_array = embedding_service.encode(texts)
 
-    metadata = []
     for i, sec in enumerate(sections):
         sec.embedding = emb_array[i].tobytes()
-        metadata.append({
-            "course_id": sec.course.id,
-            "course_code": sec.course.code,
-            "course_name": sec.course.name,
-            "university": sec.course.university or "",
-            "faculty": sec.course.faculty or "",
-            "section_heading": sec.heading,
-            "section_content": sec.content or "",
-            "department": sec.course.department or "",
-        })
 
     await db.flush()
-    if _use_faiss():
-        embedding_service.build_index(emb_array, metadata)
-        embedding_service.save_index()
-    else:
-        await _store_section_vectors(db, [(sections[i], emb_array[i]) for i in range(len(sections))])
+    await _store_section_vectors(db, [(sections[i], emb_array[i]) for i in range(len(sections))])
     logger.info(f"Re-embedding complete: {len(sections)} sections indexed")
 
 
 async def ensure_pgvector_ready(db: AsyncSession):
     """Startup hook for the pgvector backend.
 
-    Mirrors the FAISS model-marker check: if the stored vectors were built with a
-    different embedding model than the one now configured, re-embed everything.
-    Then record the current model name. Safe to call when no courses exist yet.
+    If the stored vectors were built with a different embedding model than the one
+    now configured, re-embed everything, then record the current model name. Safe
+    to call when no courses exist yet.
     """
     res = await db.execute(text("SELECT model_name FROM embedding_meta WHERE id = 1"))
     row = res.first()
@@ -285,53 +241,7 @@ async def ensure_pgvector_ready(db: AsyncSession):
 
 
 async def index_vector_count(db: AsyncSession) -> int:
-    """Number of searchable section vectors, for health/stats — backend-aware."""
-    if _use_faiss():
-        return embedding_service.index.ntotal if embedding_service.index else 0
+    """Number of searchable section vectors in pgvector, for health/stats."""
     return await db.scalar(
         select(func.count()).select_from(CourseSection).where(CourseSection.embedding_vec.isnot(None))
     ) or 0
-
-
-async def rebuild_faiss_index(db: AsyncSession):
-    """Rebuild the entire FAISS index from stored course section embeddings.
-
-    No-op under the pgvector backend, where search reads the shared DB directly and
-    there is no in-process index to rebuild (delete/update already mutate the DB).
-    """
-    if not _use_faiss():
-        return
-    result = await db.execute(
-        select(CourseSection).options(selectinload(CourseSection.course))
-    )
-    sections = result.scalars().all()
-
-    if not sections:
-        embedding_service.index = None
-        embedding_service.id_map = []
-        embedding_service.save_index()
-        logger.info("FAISS index cleared (no sections)")
-        return
-
-    embeddings = []
-    metadata = []
-    for sec in sections:
-        if sec.embedding:
-            emb = np.frombuffer(sec.embedding, dtype=np.float32)
-            embeddings.append(emb)
-            metadata.append({
-                "course_id": sec.course.id,
-                "course_code": sec.course.code,
-                "course_name": sec.course.name,
-                "university": sec.course.university or "",
-                "faculty": sec.course.faculty or "",
-                "section_heading": sec.heading,
-                "section_content": sec.content or "",
-                "department": sec.course.department or "",
-            })
-
-    if embeddings:
-        emb_array = np.vstack(embeddings)
-        embedding_service.build_index(emb_array, metadata)
-        embedding_service.save_index()
-        logger.info(f"FAISS index rebuilt with {len(embeddings)} vectors")

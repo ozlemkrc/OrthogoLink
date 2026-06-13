@@ -5,7 +5,7 @@ AI-powered web application that compares a new course syllabus against stored un
 ## Features
 
 ### Core
-- **Semantic Comparison Engine** - Sentence-BERT (paraphrase-multilingual-MiniLM-L12-v2) + FAISS for fast cosine similarity search, with Turkish↔English cross-lingual matching
+- **Semantic Comparison Engine** - Sentence-BERT (paraphrase-multilingual-MiniLM-L12-v2) + pgvector for fast cosine similarity search, with Turkish↔English cross-lingual matching
 - **Optional Cross-Encoder Re-ranking** - retrieve-then-rerank stage for higher precision on confusable course pairs (validated by the eval harness)
 - **PDF & Text Input** - Upload PDF syllabi or paste text directly
 - **Section-Level Analysis** - Splits syllabi into sections (Learning Outcomes, Course Content, etc.) for granular matching
@@ -34,7 +34,7 @@ AI-powered web application that compares a new course syllabus against stored un
 |-------|-----------|
 | Backend | Python 3.11, FastAPI, SQLAlchemy (async) |
 | AI/NLP | Sentence-Transformers bi-encoder (`paraphrase-multilingual-MiniLM-L12-v2`) + optional cross-encoder re-ranker |
-| Vector search | PostgreSQL + `pgvector` (HNSW cosine index); FAISS retained for the offline benchmark |
+| Vector search | PostgreSQL + `pgvector` (HNSW cosine index); in-memory numpy index for the offline benchmark |
 | Database | PostgreSQL 16 (`pgvector/pgvector:pg16`) |
 | Frontend | React 18, Axios |
 | Deployment | Docker, Docker Compose, Nginx |
@@ -57,7 +57,7 @@ OrthogoLink/
 │   │   │   ├── course.py          # ORM models (Course, Section, User, etc.)
 │   │   │   └── schemas.py         # Pydantic schemas
 │   │   ├── services/
-│   │   │   ├── embedding_service.py    # Sentence-BERT bi-encoder + cross-encoder + FAISS (benchmark)
+│   │   │   ├── embedding_service.py    # Sentence-BERT bi-encoder + cross-encoder + in-memory index (benchmark)
 │   │   │   ├── vector_search.py        # pgvector cosine search (production backend)
 │   │   │   ├── pdf_service.py          # PDF extraction + section splitting
 │   │   │   ├── comparison_service.py   # Comparison pipeline with filtering
@@ -183,7 +183,7 @@ Two layers — see [backend/tests/README.md](backend/tests/README.md) for detail
 
 ### Cross-encoder re-ranking (optional precision stage)
 
-The default pipeline is a fast **bi-encoder** (embed once, FAISS cosine search).
+The default pipeline is a fast **bi-encoder** (embed once, pgvector cosine search).
 Enabling `RERANK_ENABLED` adds a second **cross-encoder** stage that re-reads each
 `(query section, candidate section)` pair jointly and re-scores the bi-encoder's
 top `RERANK_CANDIDATES`. The cross-encoder score is squashed to `[0,1]` and blended
@@ -210,7 +210,7 @@ stays fast unless the benchmark justifies turning it on.
 | `CORS_ORIGINS` | `http://localhost:3000,...` | Allowed CORS origins |
 | `MODEL_NAME` | `paraphrase-multilingual-MiniLM-L12-v2` | Sentence-Transformer model (multilingual; required for TR/EN comparison) |
 | `SIMILARITY_THRESHOLD` | `0.70` | Overlap threshold |
-| `SEARCH_BACKEND` | `pgvector` | `pgvector` (multi-worker, DB-backed) or `faiss` (single-worker, in-process) |
+| `SEARCH_BACKEND` | `pgvector` | `pgvector` (multi-worker, DB-backed). `memory` is an in-process numpy index used only by the eval harness, not a deployment option |
 | `EMBEDDING_DIM` | `384` | Embedding size; pgvector column dimension (must match the model) |
 | `RERANK_ENABLED` | `false` | Enable cross-encoder re-ranking of bi-encoder candidates |
 | `RERANK_MODEL` | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingual cross-encoder used for re-ranking |
@@ -223,15 +223,14 @@ stays fast unless the benchmark justifies turning it on.
 | `RATE_LIMIT_ENABLED` | `true` | Enable per-IP API rate limiting |
 | `RATE_LIMIT` | `60/minute` | Per-IP request budget applied to all routes |
 
-> **Deployment note — scaling.** With the default `SEARCH_BACKEND=pgvector`,
-> embeddings are searched in PostgreSQL (via the `pgvector` extension), so the
-> backend can run with **multiple uvicorn workers** and survives restarts —
-> runtime course add/update/delete/import is visible to every worker immediately,
-> with no in-memory index to keep in sync.
+> **Deployment note — scaling.** Embeddings are searched in PostgreSQL (via the
+> `pgvector` extension), so the backend is **stateless** and can run with
+> **multiple uvicorn workers** and replicas, and survives restarts — runtime
+> course add/update/delete/import is visible to every worker immediately, with no
+> in-memory index to keep in sync.
 >
-> The legacy `SEARCH_BACKEND=faiss` keeps the index in process memory and must run
-> with a **single** worker (it is also the backend the standalone
-> `eval/benchmark.py` uses, since the benchmark has no database).
+> `SEARCH_BACKEND=memory` is an in-process numpy index with no database, used only
+> by the standalone `eval/benchmark.py`. It is not a deployment option.
 
 ## Production Hardening
 

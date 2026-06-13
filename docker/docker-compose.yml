@@ -35,9 +35,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/orthogonality
       DATABASE_URL_SYNC: postgresql://postgres:postgres@db:5432/orthogonality
       CORS_ORIGINS: http://localhost:3000,http://localhost:80,http://localhost
-      FAISS_INDEX_PATH: /app/data/faiss_index
-    volumes:
-      - faiss_data:/app/data
     ports:
       - "8000:8000"
 
@@ -54,4 +51,3 @@ services:
 
 volumes:
   pgdata:
-  faiss_data:

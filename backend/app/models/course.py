@@ -24,9 +24,9 @@ _settings = get_settings()
 _EMBEDDING_DIM = _settings.EMBEDDING_DIM
 
 # The pgvector column is only a real ``vector(...)`` type when the pgvector backend
-# is active (and the lib is installed). Under the faiss backend it degrades to a
-# placeholder LargeBinary so the schema works on a plain Postgres image with no
-# vector extension. The search backend is a deploy-time choice.
+# is active (and the lib is installed). Otherwise (the in-memory "memory" backend
+# used by the eval harness, or the stubbed test env) it degrades to a placeholder
+# LargeBinary so the schema works on a plain Postgres image with no vector extension.
 if _HAS_PGVECTOR and _settings.SEARCH_BACKEND == "pgvector":
     _EMBEDDING_COLUMN_TYPE = Vector(_EMBEDDING_DIM)
 else:
@@ -65,8 +65,8 @@ class CourseSection(Base):
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     heading = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(LargeBinary, nullable=True)  # serialized numpy array (legacy / FAISS rebuild)
-    embedding_vec = Column(_EMBEDDING_COLUMN_TYPE, nullable=True)  # pgvector search column (vector type only under pgvector backend)
+    embedding = Column(LargeBinary, nullable=True)  # serialized numpy array (source of truth for re-embed/backfill)
+    embedding_vec = Column(_EMBEDDING_COLUMN_TYPE, nullable=True)  # pgvector search column (real vector type only under pgvector backend)
 
     course = relationship("Course", back_populates="sections")
 

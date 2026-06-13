@@ -1,0 +1,75 @@
+# Production stack: same three services as docker-compose.yml, plus Caddy in
+# front for automatic HTTPS (Let's Encrypt). Differences from the dev compose:
+#   - db and backend are NOT published to the host — only Caddy exposes 80/443
+#   - Postgres password and public domain come from docker/.env (see below)
+#
+# Usage (on the server, from the docker/ directory):
+#   1. Create docker/.env with:
+#        DOMAIN=yourname.duckdns.org
+#        POSTGRES_PASSWORD=<long random value>
+#   2. Fill in ../backend/.env (SECRET_KEY, ADMIN_PASSWORD, DEBUG=false, ...)
+#   3. docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  # ── PostgreSQL Database (with pgvector extension) ────────
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in docker/.env}
+      POSTGRES_DB: orthogonality
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Backend ──────────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env
+    environment:
+      # These override any same-named vars from env_file above
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@db:5432/orthogonality
+      DATABASE_URL_SYNC: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/orthogonality
+      CORS_ORIGINS: https://${DOMAIN:?set DOMAIN in docker/.env}
+
+  # ── React Frontend (nginx, serves SPA + proxies /api) ────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  # ── Caddy (TLS termination, auto Let's Encrypt) ──────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

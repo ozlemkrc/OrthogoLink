@@ -1,0 +1,638 @@
+{
+  "model": "paraphrase-multilingual-MiniLM-L12-v2",
+  "configured_threshold": 0.7,
+  "baseline": {
+    "mode": "baseline",
+    "best_threshold": 0.75,
+    "best_f1": 0.9412,
+    "sweep": [
+      {
+        "threshold": 0.4,
+        "precision": 0.2179,
+        "recall": 1.0,
+        "f1": 0.3579,
+        "accuracy": 0.7176,
+        "tp": 17,
+        "fp": 61,
+        "fn": 0,
+        "tn": 138
+      },
+      {
+        "threshold": 0.45,
+        "precision": 0.2267,
+        "recall": 1.0,
+        "f1": 0.3696,
+        "accuracy": 0.7315,
+        "tp": 17,
+        "fp": 58,
+        "fn": 0,
+        "tn": 141
+      },
+      {
+        "threshold": 0.5,
+        "precision": 0.2267,
+        "recall": 1.0,
+        "f1": 0.3696,
+        "accuracy": 0.7315,
+        "tp": 17,
+        "fp": 58,
+        "fn": 0,
+        "tn": 141
+      },
+      {
+        "threshold": 0.55,
+        "precision": 0.25,
+        "recall": 1.0,
+        "f1": 0.4,
+        "accuracy": 0.7639,
+        "tp": 17,
+        "fp": 51,
+        "fn": 0,
+        "tn": 148
+      },
+      {
+        "threshold": 0.6,
+        "precision": 0.3036,
+        "recall": 1.0,
+        "f1": 0.4658,
+        "accuracy": 0.8194,
+        "tp": 17,
+        "fp": 39,
+        "fn": 0,
+        "tn": 160
+      },
+      {
+        "threshold": 0.65,
+        "precision": 0.4146,
+        "recall": 1.0,
+        "f1": 0.5862,
+        "accuracy": 0.8889,
+        "tp": 17,
+        "fp": 24,
+        "fn": 0,
+        "tn": 175
+      },
+      {
+        "threshold": 0.7,
+        "precision": 0.6538,
+        "recall": 1.0,
+        "f1": 0.7907,
+        "accuracy": 0.9583,
+        "tp": 17,
+        "fp": 9,
+        "fn": 0,
+        "tn": 190
+      },
+      {
+        "threshold": 0.75,
+        "precision": 0.9412,
+        "recall": 0.9412,
+        "f1": 0.9412,
+        "accuracy": 0.9907,
+        "tp": 16,
+        "fp": 1,
+        "fn": 1,
+        "tn": 198
+      },
+      {
+        "threshold": 0.8,
+        "precision": 1.0,
+        "recall": 0.8235,
+        "f1": 0.9032,
+        "accuracy": 0.9861,
+        "tp": 14,
+        "fp": 0,
+        "fn": 3,
+        "tn": 199
+      },
+      {
+        "threshold": 0.85,
+        "precision": 1.0,
+        "recall": 0.5882,
+        "f1": 0.7407,
+        "accuracy": 0.9676,
+        "tp": 10,
+        "fp": 0,
+        "fn": 7,
+        "tn": 199
+      },
+      {
+        "threshold": 0.9,
+        "precision": 1.0,
+        "recall": 0.4118,
+        "f1": 0.5833,
+        "accuracy": 0.9537,
+        "tp": 7,
+        "fp": 0,
+        "fn": 10,
+        "tn": 199
+      }
+    ],
+    "per_query": [
+      {
+        "query": "Algorithms & Data Structures (EN proposal)",
+        "expected_overlap": [
+          "BLM301",
+          "CENG315",
+          "CS301"
+        ],
+        "similarities": {
+          "CS301": 0.8799,
+          "CENG315": 0.8248,
+          "BLM301": 0.8171,
+          "CS350": 0.7578,
+          "CS101": 0.7418,
+          "CS450": 0.7319,
+          "IST300": 0.6557
+        }
+      },
+      {
+        "query": "Makine Öğrenmesine Giriş (TR proposal)",
+        "expected_overlap": [
+          "CS420"
+        ],
+        "similarities": {
+          "CS420": 0.8263,
+          "CS450": 0.7386,
+          "BLM301": 0.6961,
+          "IST220": 0.6828,
+          "IST300": 0.6683,
+          "BLM340": 0.6282
+        }
+      },
+      {
+        "query": "Relational Databases & SQL (EN proposal)",
+        "expected_overlap": [
+          "CS350"
+        ],
+        "similarities": {
+          "CS350": 0.932,
+          "CS301": 0.7081,
+          "CS101": 0.6968,
+          "CS340": 0.6652,
+          "IST300": 0.6572,
+          "BLM301": 0.6165,
+          "CS410": 0.5725
+        }
+      },
+      {
+        "query": "Introduction to Programming with Python (EN proposal)",
+        "expected_overlap": [
+          "BBM104",
+          "CS101"
+        ],
+        "similarities": {
+          "CS101": 0.9224,
+          "BBM104": 0.8256,
+          "CS301": 0.71,
+          "CENG315": 0.6122,
+          "CS350": 0.601,
+          "CS330": 0.5857,
+          "CS410": 0.5587,
+          "CS420": 0.5362
+        }
+      },
+      {
+        "query": "Olasılık ve İstatistik (TR proposal)",
+        "expected_overlap": [
+          "IST220"
+        ],
+        "similarities": {
+          "IST220": 0.8685,
+          "BLM301": 0.6383,
+          "CS450": 0.6067,
+          "IST300": 0.6052,
+          "CS420": 0.6044,
+          "BLM340": 0.5301,
+          "CENG315": 0.5301,
+          "CS301": 0.5258
+        }
+      },
+      {
+        "query": "Operating Systems Concepts (EN proposal)",
+        "expected_overlap": [
+          "BLM340",
+          "CS340"
+        ],
+        "similarities": {
+          "CS340": 0.9034,
+          "BLM340": 0.7657,
+          "CENG315": 0.6088,
+          "CS301": 0.6013,
+          "CS101": 0.5783,
+          "CS420": 0.5729,
+          "CS330": 0.5709
+        }
+      },
+      {
+        "query": "Bilgisayar Ağları (TR proposal)",
+        "expected_overlap": [
+          "CS360"
+        ],
+        "similarities": {
+          "CS360": 0.8502,
+          "CS410": 0.6025,
+          "BLM340": 0.597,
+          "BLM301": 0.5887,
+          "CS350": 0.5422,
+          "CS340": 0.5226
+        }
+      },
+      {
+        "query": "Deep Learning for Vision (EN proposal)",
+        "expected_overlap": [
+          "CS420",
+          "CS450"
+        ],
+        "similarities": {
+          "CS450": 0.9411,
+          "CS420": 0.7965,
+          "CS410": 0.7054,
+          "CS301": 0.69,
+          "IST300": 0.6895,
+          "CENG315": 0.6581
+        }
+      },
+      {
+        "query": "Yazılım Mühendisliği (TR proposal)",
+        "expected_overlap": [
+          "CS330"
+        ],
+        "similarities": {
+          "CS330": 0.9009,
+          "BLM340": 0.6901,
+          "IST300": 0.6518,
+          "BLM301": 0.6444,
+          "CS301": 0.6437,
+          "BBM104": 0.5805,
+          "CS340": 0.5534
+        }
+      },
+      {
+        "query": "Data Mining & Predictive Modeling (EN proposal)",
+        "expected_overlap": [
+          "CS420",
+          "IST300"
+        ],
+        "similarities": {
+          "IST300": 0.9965,
+          "CS420": 0.7228,
+          "BLM301": 0.7122,
+          "CS301": 0.7085,
+          "CS350": 0.692,
+          "CS450": 0.6614
+        }
+      },
+      {
+        "query": "Multivariable Calculus (EN proposal)",
+        "expected_overlap": [
+          "MATH202"
+        ],
+        "similarities": {
+          "MATH202": 0.9744,
+          "MATH201": 0.6701,
+          "CS450": 0.602,
+          "CS420": 0.6015,
+          "IST220": 0.5737,
+          "CENG315": 0.5623,
+          "CS101": 0.5339
+        }
+      },
+      {
+        "query": "Marine Biology of Coral Reefs (orthogonal control)",
+        "expected_overlap": [],
+        "similarities": {
+          "CS301": 0.4464,
+          "CS360": 0.4443,
+          "CS420": 0.4351,
+          "CS350": 0.3797,
+          "IST300": 0.3791,
+          "IST220": 0.3374,
+          "CENG315": 0.3194,
+          "MATH202": 0.315
+        }
+      }
+    ]
+  },
+  "rerank": {
+    "mode": "rerank",
+    "best_threshold": 0.85,
+    "best_f1": 0.9032,
+    "sweep": [
+      {
+        "threshold": 0.4,
+        "precision": 0.3542,
+        "recall": 1.0,
+        "f1": 0.5231,
+        "accuracy": 0.8565,
+        "tp": 17,
+        "fp": 31,
+        "fn": 0,
+        "tn": 168
+      },
+      {
+        "threshold": 0.45,
+        "precision": 0.425,
+        "recall": 1.0,
+        "f1": 0.5965,
+        "accuracy": 0.8935,
+        "tp": 17,
+        "fp": 23,
+        "fn": 0,
+        "tn": 176
+      },
+      {
+        "threshold": 0.5,
+        "precision": 0.4474,
+        "recall": 1.0,
+        "f1": 0.6182,
+        "accuracy": 0.9028,
+        "tp": 17,
+        "fp": 21,
+        "fn": 0,
+        "tn": 178
+      },
+      {
+        "threshold": 0.55,
+        "precision": 0.4857,
+        "recall": 1.0,
+        "f1": 0.6538,
+        "accuracy": 0.9167,
+        "tp": 17,
+        "fp": 18,
+        "fn": 0,
+        "tn": 181
+      },
+      {
+        "threshold": 0.6,
+        "precision": 0.5862,
+        "recall": 1.0,
+        "f1": 0.7391,
+        "accuracy": 0.9444,
+        "tp": 17,
+        "fp": 12,
+        "fn": 0,
+        "tn": 187
+      },
+      {
+        "threshold": 0.65,
+        "precision": 0.6667,
+        "recall": 0.9412,
+        "f1": 0.7805,
+        "accuracy": 0.9583,
+        "tp": 16,
+        "fp": 8,
+        "fn": 1,
+        "tn": 191
+      },
+      {
+        "threshold": 0.7,
+        "precision": 0.6957,
+        "recall": 0.9412,
+        "f1": 0.8,
+        "accuracy": 0.963,
+        "tp": 16,
+        "fp": 7,
+        "fn": 1,
+        "tn": 192
+      },
+      {
+        "threshold": 0.75,
+        "precision": 0.8,
+        "recall": 0.9412,
+        "f1": 0.8649,
+        "accuracy": 0.9769,
+        "tp": 16,
+        "fp": 4,
+        "fn": 1,
+        "tn": 195
+      },
+      {
+        "threshold": 0.8,
+        "precision": 0.8333,
+        "recall": 0.8824,
+        "f1": 0.8571,
+        "accuracy": 0.9769,
+        "tp": 15,
+        "fp": 3,
+        "fn": 2,
+        "tn": 196
+      },
+      {
+        "threshold": 0.85,
+        "precision": 1.0,
+        "recall": 0.8235,
+        "f1": 0.9032,
+        "accuracy": 0.9861,
+        "tp": 14,
+        "fp": 0,
+        "fn": 3,
+        "tn": 199
+      },
+      {
+        "threshold": 0.9,
+        "precision": 1.0,
+        "recall": 0.8235,
+        "f1": 0.9032,
+        "accuracy": 0.9861,
+        "tp": 14,
+        "fp": 0,
+        "fn": 3,
+        "tn": 199
+      }
+    ],
+    "per_query": [
+      {
+        "query": "Algorithms & Data Structures (EN proposal)",
+        "expected_overlap": [
+          "BLM301",
+          "CENG315",
+          "CS301"
+        ],
+        "similarities": {
+          "CS301": 0.94,
+          "BLM301": 0.9084,
+          "CENG315": 0.9083,
+          "CS101": 0.8249,
+          "CS350": 0.8245,
+          "MATH201": 0.4223,
+          "BLM340": 0.4167
+        }
+      },
+      {
+        "query": "Makine Öğrenmesine Giriş (TR proposal)",
+        "expected_overlap": [
+          "CS420"
+        ],
+        "similarities": {
+          "CS420": 0.9132,
+          "IST220": 0.802,
+          "IST300": 0.5943,
+          "CENG315": 0.5208,
+          "CS450": 0.4359,
+          "BLM301": 0.3596,
+          "MATH201": 0.3179
+        }
+      },
+      {
+        "query": "Relational Databases & SQL (EN proposal)",
+        "expected_overlap": [
+          "CS350"
+        ],
+        "similarities": {
+          "CS350": 0.966,
+          "BLM301": 0.38,
+          "CS301": 0.3609,
+          "CS101": 0.3493,
+          "CENG315": 0.3422,
+          "IST300": 0.3294,
+          "CS410": 0.2905
+        }
+      },
+      {
+        "query": "Introduction to Programming with Python (EN proposal)",
+        "expected_overlap": [
+          "BBM104",
+          "CS101"
+        ],
+        "similarities": {
+          "CS101": 0.9612,
+          "BBM104": 0.9115,
+          "CS340": 0.4426,
+          "CS301": 0.4405,
+          "BLM340": 0.3659,
+          "CS330": 0.3655,
+          "BLM301": 0.3233
+        }
+      },
+      {
+        "query": "Olasılık ve İstatistik (TR proposal)",
+        "expected_overlap": [
+          "IST220"
+        ],
+        "similarities": {
+          "IST220": 0.9342,
+          "IST300": 0.7694,
+          "CS420": 0.7448,
+          "CENG315": 0.4285,
+          "MATH202": 0.4153,
+          "MATH201": 0.3472,
+          "CS301": 0.3398,
+          "BLM301": 0.3284
+        }
+      },
+      {
+        "query": "Operating Systems Concepts (EN proposal)",
+        "expected_overlap": [
+          "BLM340",
+          "CS340"
+        ],
+        "similarities": {
+          "CS340": 0.9517,
+          "BLM340": 0.8311,
+          "MATH201": 0.3383,
+          "CS301": 0.3193,
+          "CENG315": 0.3064,
+          "BLM301": 0.3006,
+          "CS101": 0.2893,
+          "CS420": 0.2868
+        }
+      },
+      {
+        "query": "Bilgisayar Ağları (TR proposal)",
+        "expected_overlap": [
+          "CS360"
+        ],
+        "similarities": {
+          "CS360": 0.9229,
+          "CS450": 0.7345,
+          "CS350": 0.7327,
+          "BLM340": 0.6631,
+          "CS340": 0.563,
+          "BLM301": 0.5124,
+          "CS301": 0.3947
+        }
+      },
+      {
+        "query": "Deep Learning for Vision (EN proposal)",
+        "expected_overlap": [
+          "CS420",
+          "CS450"
+        ],
+        "similarities": {
+          "CS450": 0.9706,
+          "CS420": 0.7725,
+          "BLM340": 0.6268,
+          "CS410": 0.6135,
+          "CENG315": 0.5979,
+          "CS360": 0.5506,
+          "BLM301": 0.3689,
+          "CS301": 0.3637
+        }
+      },
+      {
+        "query": "Yazılım Mühendisliği (TR proposal)",
+        "expected_overlap": [
+          "CS330"
+        ],
+        "similarities": {
+          "CS330": 0.9504,
+          "CS420": 0.6004,
+          "CS301": 0.5987,
+          "CENG315": 0.5888,
+          "IST300": 0.462,
+          "BLM340": 0.3197,
+          "CS340": 0.2977,
+          "BBM104": 0.2907,
+          "BLM301": 0.2753
+        }
+      },
+      {
+        "query": "Data Mining & Predictive Modeling (EN proposal)",
+        "expected_overlap": [
+          "CS420",
+          "IST300"
+        ],
+        "similarities": {
+          "IST300": 0.9982,
+          "CS420": 0.6307,
+          "BLM301": 0.6197,
+          "CS301": 0.3667,
+          "CS350": 0.3467,
+          "CS450": 0.3464,
+          "CS410": 0.333
+        }
+      },
+      {
+        "query": "Multivariable Calculus (EN proposal)",
+        "expected_overlap": [
+          "MATH202"
+        ],
+        "similarities": {
+          "MATH202": 0.9871,
+          "MATH201": 0.5105,
+          "BLM301": 0.4682,
+          "CS410": 0.4006,
+          "BBM104": 0.3345,
+          "IST220": 0.2939,
+          "CS101": 0.27,
+          "CENG315": 0.2695
+        }
+      },
+      {
+        "query": "Marine Biology of Coral Reefs (orthogonal control)",
+        "expected_overlap": [],
+        "similarities": {
+          "BLM301": 0.2778,
+          "CS301": 0.2275,
+          "CS360": 0.226,
+          "IST300": 0.2259,
+          "CS420": 0.2232,
+          "BLM340": 0.2177,
+          "CENG315": 0.2041
+        }
+      }
+    ]
+  },
+  "best_f1_delta": -0.038
+}

@@ -1,7 +1,7 @@
 """
 Evaluation harness for overlap-detection quality.
 
-Builds a FAISS index from the labeled ``CATALOG`` (using the *real* embedding
+Builds an in-memory index from the labeled ``CATALOG`` (using the *real* embedding
 model configured in ``settings.MODEL_NAME``), runs every proposed-course query
 through the production ``compare_syllabus`` pipeline, and measures how well the
 course-level overlap decision matches the human-labeled ground truth in
@@ -18,8 +18,8 @@ Run from the ``backend`` directory (so ``app`` is importable):
     python -m eval.benchmark
     python -m eval.benchmark --json results.json   # also dump machine-readable
 
-Requires the real dependencies (sentence-transformers, faiss-cpu) and will
-download the model on first run (~90-400MB depending on MODEL_NAME). Inside the
+Requires the real sentence-transformers dependency and will download the model
+on first run (~90-400MB depending on MODEL_NAME). Inside the
 project this is already available in the backend Docker image:
 
     docker compose run --rm backend python -m eval.benchmark
@@ -75,11 +75,11 @@ class Metrics:
 
 
 def build_catalog_index(catalog: list[CatalogCourse]) -> None:
-    """Embed every catalog course's sections and build the FAISS index, mirroring
-    the metadata layout that ``course_service`` produces in production."""
+    """Embed every catalog course's sections and build the in-memory index,
+    mirroring the metadata layout that ``course_service`` produces in production."""
     # The benchmark is standalone (no database), so it always uses the in-process
-    # FAISS backend regardless of the configured production backend (pgvector).
-    get_settings().SEARCH_BACKEND = "faiss"
+    # numpy backend regardless of the configured production backend (pgvector).
+    get_settings().SEARCH_BACKEND = "memory"
     embedding_service.load_model()
 
     all_embeddings: list[np.ndarray] = []
